@@ -12,6 +12,7 @@ from selenium.webdriver.chrome.options import Options
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.chrome.service import Service as ChromeService
 import ephem
+import traceback
 
 
 LOGIN = os.getenv("LOGIN") or os.getenv("MANIAPLANET_LOGIN")
@@ -31,7 +32,11 @@ DEFAULT_PLAYLIST = os.getenv("DEFAULT_PLAYLIST", "3029")
 
 SAVE_BUTTON_TEXTS = [
     "Submit"
+    "Save", "Zapisz", "Set", "Apply", "Update", "Confirm", "OK",
 ]
+
+# wait timeout for Selenium explicit waits (seconds)
+WAIT_TIMEOUT = int(os.getenv("WAIT_TIMEOUT", "30"))
 
 
 def lunar_day(today_utc: Optional[dt.datetime] = None) -> int:
@@ -107,17 +112,20 @@ def select_playlist_for_day(ids: List[str], day: int, date_dt: dt.datetime) -> T
 
 
 def build_driver() -> webdriver.Chrome:
+    print("[DEBUG] Starting Chrome driver build...", flush=True)
     options = Options()
     options.add_argument("--headless=new")
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--window-size=1200,900")
     service = ChromeService(ChromeDriverManager().install())
-    return webdriver.Chrome(service=service, options=options)
+    driver = webdriver.Chrome(service=service, options=options)
+    print("[DEBUG] Chrome driver started.", flush=True)
+    return driver
 
 
 def smart_fill_login(driver: webdriver.Chrome, login: str, password: str):
-    wait = WebDriverWait(driver, 20)
+    wait = WebDriverWait(driver, WAIT_TIMEOUT)
     driver.get(LOGIN_URL)
 
     login_locators = [
@@ -173,11 +181,12 @@ def smart_fill_login(driver: webdriver.Chrome, login: str, password: str):
 
     submit.click()
 
+    # wait up to WAIT_TIMEOUT for redirect or URL change
     wait.until(lambda d: d.current_url != LOGIN_URL)
 
 
 def change_playlist(driver: webdriver.Chrome, playlist_id: str):
-    wait = WebDriverWait(driver, 20)
+    wait = WebDriverWait(driver, WAIT_TIMEOUT)
     driver.get(TARGET_URL)
 
     selects = driver.find_elements(By.TAG_NAME, "select")

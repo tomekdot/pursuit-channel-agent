@@ -1,0 +1,41 @@
+name: Maniaplanet Playlist Agent
+
+on:
+  schedule:
+    # Daily at 08:00 UTC
+    - cron: '0 8 * * *'
+  workflow_dispatch: {}
+
+jobs:
+  run-agent:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Chrome
+        uses: browser-actions/setup-chrome@v1
+        with:
+          chrome-version: stable
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run agent
+        env:
+          LOGIN: ${{ secrets.MANIAPLANET_LOGIN }}
+          PASSWORD: ${{ secrets.MANIAPLANET_PASSWORD }}
+          # You can override – e.g. if URL differs
+          TARGET_URL: ${{ vars.TARGET_URL }}
+          LOGIN_URL: ${{ vars.LOGIN_URL }}
+          # CSV with playlist IDs – defaults to 3045,3029
+          PLAYLIST_IDS: ${{ vars.PLAYLIST_IDS }}
+        run: |
+          python agent.py

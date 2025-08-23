@@ -31,8 +31,7 @@ SPECIAL_PLAYLIST = os.getenv("SPECIAL_PLAYLIST", "3045")
 DEFAULT_PLAYLIST = os.getenv("DEFAULT_PLAYLIST", "3029")
 
 SAVE_BUTTON_TEXTS = [
-    "Submit"
-    "Save", "Zapisz", "Set", "Apply", "Update", "Confirm", "OK",
+    "Submit", "Save", "Zapisz", "Set", "Apply", "Update", "Confirm", "OK",
 ]
 
 # wait timeout for Selenium explicit waits (seconds)
@@ -143,15 +142,20 @@ def save_debug(driver: webdriver.Chrome, name: str):
 def smart_fill_login(driver: webdriver.Chrome, login: str, password: str):
     wait = WebDriverWait(driver, WAIT_TIMEOUT)
     driver.get(LOGIN_URL)
+    # save initial login page for debugging
+    try:
+        save_debug(driver, "login_page")
+    except Exception:
+        pass
 
     login_locators = [
-        (By.NAME, "username"), (By.NAME, "login"), (By.NAME, "email"),
+    (By.NAME, "_username"), (By.NAME, "username"), (By.NAME, "login"), (By.NAME, "email"),
         (By.ID, "username"), (By.ID, "login"), (By.ID, "email"),
         (By.CSS_SELECTOR, "input[type='email']"),
         (By.CSS_SELECTOR, "input[type='text']"),
     ]
     pwd_locators = [
-        (By.NAME, "password"), (By.ID, "password"),
+    (By.NAME, "_password"), (By.NAME, "password"), (By.ID, "password"),
         (By.CSS_SELECTOR, "input[type='password']"),
     ]
 
@@ -164,6 +168,10 @@ def smart_fill_login(driver: webdriver.Chrome, login: str, password: str):
         except Exception:
             continue
     if not login_input:
+        try:
+            save_debug(driver, "login_no_input")
+        except Exception:
+            pass
         raise RuntimeError("Login field not found – update selectors in agent.py")
     login_input.clear(); login_input.send_keys(login)
 
@@ -176,6 +184,10 @@ def smart_fill_login(driver: webdriver.Chrome, login: str, password: str):
         except Exception:
             continue
     if not pwd_input:
+        try:
+            save_debug(driver, "login_no_password")
+        except Exception:
+            pass
         raise RuntimeError("Password field not found – update selectors in agent.py")
     pwd_input.clear(); pwd_input.send_keys(password)
 
@@ -196,40 +208,100 @@ def smart_fill_login(driver: webdriver.Chrome, login: str, password: str):
         raise RuntimeError("Login button not found – update selectors in agent.py")
 
     submit.click()
-
     # wait up to WAIT_TIMEOUT for redirect or URL change
-    wait.until(lambda d: d.current_url != LOGIN_URL)
+    try:
+        wait.until(lambda d: d.current_url != LOGIN_URL)
+    except Exception:
+        # some sites post the login form to the same URL and do not change location;
+        # don't fail the job — save debug and continue to TARGET_URL
+        try:
+            save_debug(driver, "after_login_no_redirect")
+        except Exception:
+            pass
+        print("[WARN] No redirect detected after login; continuing to TARGET_URL", flush=True)
 
 
 def change_playlist(driver: webdriver.Chrome, playlist_id: str):
     wait = WebDriverWait(driver, WAIT_TIMEOUT)
     driver.get(TARGET_URL)
-
-    selects = driver.find_elements(By.TAG_NAME, "select")
+    try:
+        save_debug(driver, "target_page")
+    except Exception:
+        pass
+    # Prefer the known select id/name from the form snippet, then fall back to searching all selects.
     target_select = None
-    for s in selects:
-        try:
-            if s.get_attribute("disabled"):
-                continue
-            options = s.find_elements(By.TAG_NAME, "option")
-            if any(o.get_attribute("value") == playlist_id for o in options):
-                target_select = s
-                break
-        except Exception:
-            continue
+    try:
+        # try id first (example: id="playlist_0_playlist")
+        target_select = wait.until(EC.presence_of_element_located((By.ID, "playlist_0_playlist")))
+    except Exception:
+        target_select = None
 
     if not target_select:
+        try:
+            # try name attribute (example: name="playlist_0[playlist]")
+            target_select = wait.until(EC.presence_of_element_located((By.NAME, "playlist_0[playlist]")))
+        except Exception:
+            target_select = None
+
+    # fallback: scan all select elements for the desired option value
+    if not target_select:
+        selects = driver.find_elements(By.TAG_NAME, "select")
+        for s in selects:
+            try:
+                if s.get_attribute("disabled"):
+                    continue
+                options = s.find_elements(By.TAG_NAME, "option")
+                if any(o.get_attribute("value") == playlist_id for o in options):
+                    target_select = s
+                    break
+            except Exception:
+                continue
+
+    if not target_select:
+        try:
+            save_debug(driver, "no_select")
+        except Exception:
+            pass
         raise RuntimeError(f"<select> with option value={playlist_id} not found. Update selectors.")
 
-    Select(target_select).select_by_value(playlist_id)
+    # Use Select helper to pick the playlist value
+    try:
+        Select(target_select).select_by_value(playlist_id)
+    except Exception:
+        # if Select fails (e.g., target_select is a webelement proxy), try JavaScript
+        try:
+            driver.execute_script("arguments[0].value = arguments[1]; arguments[0].dispatchEvent(new Event('change'));", target_select, playlist_id)
+        except Exception:
+            try:
+                save_debug(driver, "select_set_fail")
+            except Exception:
+                pass
+            raise
 
+    # Attempt to click the known submit button first (id/name from the snippet), then fall back
     save_clicked = False
     try:
-        btn = driver.find_element(By.CSS_SELECTOR, "button[type='submit']")
+        btn = driver.find_element(By.ID, "playlist_0_submit")
         if btn.is_enabled():
             btn.click(); save_clicked = True
     except Exception:
         pass
+
+    if not save_clicked:
+        try:
+            btn = driver.find_element(By.NAME, "playlist_0[submit]")
+            if btn.is_enabled():
+                btn.click(); save_clicked = True
+        except Exception:
+            pass
+
+    if not save_clicked:
+        try:
+            btn = driver.find_element(By.CSS_SELECTOR, "button[type='submit']")
+            if btn.is_enabled():
+                btn.click(); save_clicked = True
+        except Exception:
+            pass
 
     if not save_clicked:
         for text in SAVE_BUTTON_TEXTS:
@@ -244,7 +316,12 @@ def change_playlist(driver: webdriver.Chrome, playlist_id: str):
             except Exception:
                 continue
 
+    # give the site a moment to persist
     time.sleep(3)
+    try:
+        save_debug(driver, "after_change")
+    except Exception:
+        pass
 
 
 def main():

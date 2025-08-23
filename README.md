@@ -32,7 +32,7 @@ This agent logs into Maniaplanet and selects a playlist based on the **lunar mon
 If login or save don't hit the selectors:
 - Change selector lists in `smart_fill_login()` and `change_playlist()` – enter correct `name/id/xpath` from DevTools.
 
-## CAPTCHA?
+## CAPTCHA
 If the site adds CAPTCHA on login, the agent will stop – in this case GitHub Actions will end the job with an error.
 
 ## Debugging
@@ -40,7 +40,7 @@ If the site adds CAPTCHA on login, the agent will stop – in this case GitHub A
 - You can temporarily add HTML dumps to artifacts, e.g. save `driver.page_source` and attach file (advanced, optional).
 
 ## Security
-- Keep login/password only in **Secrets** (don't commit them to repo!).
+- Keep login/password only in **Secrets**.
 
 ## Time zones
 - CRON in GitHub Actions works in UTC. Schedule `0 8 * * *` = 08:00 UTC.

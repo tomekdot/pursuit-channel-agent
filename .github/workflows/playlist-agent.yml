@@ -35,7 +35,7 @@ jobs:
           # You can override – e.g. if URL differs
           TARGET_URL: ${{ vars.TARGET_URL }}
           LOGIN_URL: ${{ vars.LOGIN_URL }}
-          # CSV with playlist IDs – defaults to 3045,3029
+          # CSV with playlist IDs – defaults to 3045, 3029
           PLAYLIST_IDS: ${{ vars.PLAYLIST_IDS }}
         run: |
           python agent.py

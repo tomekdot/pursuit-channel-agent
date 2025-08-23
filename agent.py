@@ -124,6 +124,22 @@ def build_driver() -> webdriver.Chrome:
     return driver
 
 
+def save_debug(driver: webdriver.Chrome, name: str):
+    """Save page source and screenshot to working directory for debugging in Actions."""
+    try:
+        html = driver.page_source
+        with open(f"{name}.html", "w", encoding="utf-8") as f:
+            f.write(html)
+        print(f"[DEBUG] Saved {name}.html", flush=True)
+    except Exception as e:
+        print(f"[DEBUG] Failed to save {name}.html: {e}", flush=True)
+    try:
+        driver.save_screenshot(f"{name}.png")
+        print(f"[DEBUG] Saved {name}.png", flush=True)
+    except Exception as e:
+        print(f"[DEBUG] Failed to save {name}.png: {e}", flush=True)
+
+
 def smart_fill_login(driver: webdriver.Chrome, login: str, password: str):
     wait = WebDriverWait(driver, WAIT_TIMEOUT)
     driver.get(LOGIN_URL)
@@ -268,7 +284,10 @@ def main():
         change_playlist(driver, playlist_id)
         print("[OK] Done.")
     finally:
-        driver.quit()
+        try:
+            driver.quit()
+        except Exception:
+            pass
 
 
 if __name__ == "__main__":

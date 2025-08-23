@@ -28,14 +28,23 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run agent
+      - name: Run agent (debug)
         env:
           LOGIN: ${{ secrets.MANIAPLANET_LOGIN }}
           PASSWORD: ${{ secrets.MANIAPLANET_PASSWORD }}
-          # You can override – e.g. if URL differs
           TARGET_URL: ${{ vars.TARGET_URL }}
           LOGIN_URL: ${{ vars.LOGIN_URL }}
-          # CSV with playlist IDs – defaults to 3045, 3029
           PLAYLIST_IDS: ${{ vars.PLAYLIST_IDS }}
+          WAIT_TIMEOUT: 60
+          PYTHONUNBUFFERED: 1
         run: |
-          python agent.py
+          python -u agent.py 2>&1 | tee agent.log
+
+      - name: Upload agent logs & debug
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-debug
+          path: |
+            agent.log
+            *.html
+            *.png

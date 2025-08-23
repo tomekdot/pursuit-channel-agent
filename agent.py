@@ -49,7 +49,17 @@ def lunar_day(today_utc: dt.datetime | None = None) -> int:
 def pick_playlist_id(ids: List[str]) -> str:
     if not ids:
         raise RuntimeError("PLAYLIST_IDS is empty – set environment variable or update code.")
+
     day = lunar_day()
+
+    # If user supplied at least 3 playlist IDs, treat them as the 3 main buckets
+    # Bucket mapping (days): 0-9 -> bucket 0, 10-19 -> bucket 1, 20-29 -> bucket 2
+    if len(ids) >= 3:
+        bucket = min(2, day // 10)
+        # Use first three IDs as the main playlists for the 3 buckets
+        return ids[bucket]
+
+    # Fallback: distribute by day across provided IDs (original behaviour)
     index = day % len(ids)
     return ids[index]
 

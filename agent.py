@@ -1,7 +1,7 @@
 import os
 import time
 import datetime as dt
-from typing import List
+from typing import List, Optional, Tuple
 
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -26,6 +26,9 @@ TARGET_URL = os.getenv(
 # List of playlist IDs as CSV in ENV or fallback to example
 PLAYLIST_IDS_ENV = os.getenv("PLAYLIST_IDS", "3045,3029")
 PLAYLIST_IDS: List[str] = [x.strip() for x in PLAYLIST_IDS_ENV.split(",") if x.strip()]
+# Test/debug options
+TEST_DATE = os.getenv("TEST_DATE")  # e.g. 2025-08-23 or 2025-08-23T08:00:00
+DRY_RUN = os.getenv("DRY_RUN", "").strip().lower() in ("1", "true", "yes")
 
 SAVE_BUTTON_TEXTS = [
     "Save", "Zapisz", "Set", "Apply", "Update", "Confirm", "OK",
@@ -35,7 +38,7 @@ SAVE_BUTTON_TEXTS = [
 # Helper: calculate "lunar day" (0–29)
 # -----------------------------
 
-def lunar_day(today_utc: dt.datetime | None = None) -> int:
+def lunar_day(today_utc: Optional[dt.datetime] = None) -> int:
     if today_utc is None:
         today_utc = dt.datetime.utcnow()
     # find previous new moon and count how many days have passed
@@ -62,6 +65,23 @@ def pick_playlist_id(ids: List[str]) -> str:
     # Fallback: distribute by day across provided IDs (original behaviour)
     index = day % len(ids)
     return ids[index]
+
+
+def select_playlist_for_day(ids: List[str], day: int) -> Tuple[str, int]:
+    """Return (playlist_id, bucket_index) for a given lunar day.
+    bucket_index: 0/1/2 for three-bucket mode, or selection index for fallback.
+    """
+    if not ids:
+        raise RuntimeError("PLAYLIST_IDS is empty – set environment variable or update code.")
+
+    # Three main buckets if user provided at least 3 IDs
+    if len(ids) >= 3:
+        bucket = min(2, day // 10)
+        return ids[bucket], bucket
+
+    # Fallback distribution
+    index = day % len(ids)
+    return ids[index], index
 
 
 # -----------------------------
@@ -199,11 +219,31 @@ def change_playlist(driver: webdriver.Chrome, playlist_id: str):
 
 
 def main():
-    if not LOGIN or not PASSWORD:
+    # Allow running in DRY_RUN or TEST_DATE mode without credentials for testing.
+    if not DRY_RUN and (not LOGIN or not PASSWORD):
         raise RuntimeError("LOGIN/PASSWORD missing from environment variables.")
 
-    playlist_id = pick_playlist_id(PLAYLIST_IDS)
-    print(f"[INFO] Selected playlist_id (lunar calendar): {playlist_id}")
+    # Determine lunar day (allow TEST_DATE override)
+    if TEST_DATE:
+        try:
+            # Accept YYYY-MM-DD or full ISO
+            if 'T' in TEST_DATE:
+                dtobj = dt.datetime.fromisoformat(TEST_DATE)
+            else:
+                dtobj = dt.datetime.fromisoformat(TEST_DATE + 'T00:00:00')
+            day = lunar_day(dtobj)
+            print(f"[DEBUG] Using TEST_DATE={TEST_DATE} -> lunar day={day}")
+        except Exception as e:
+            raise RuntimeError(f"Invalid TEST_DATE format: {e}")
+    else:
+        day = lunar_day()
+
+    playlist_id, bucket = select_playlist_for_day(PLAYLIST_IDS, day)
+    print(f"[INFO] Selected playlist_id (lunar calendar): {playlist_id} (bucket={bucket}, day={day})")
+
+    if DRY_RUN:
+        print("[DRY RUN] Exiting without running Selenium.")
+        return
 
     driver = build_driver()
     try:

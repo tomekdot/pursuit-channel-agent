@@ -1,0 +1,26 @@
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.env
+.env.*
+.envrc
+.vscode/
+*.log
+.DS_Store
+.idea/
+.gh-token
+*.sqlite3
+.pytest_cache/
+
+# virtualenv wrappers
+pip-log.txt
+pip-delete-this-directory.txt
+
+# macOS
+*.DS_Store
+
+# mypy
+.mypy_cache/

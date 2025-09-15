@@ -1,4 +1,6 @@
 name: Maniaplanet Playlist Agent
+permissions:
+  contents: read
 
 on:
   schedule:

@@ -29,6 +29,7 @@ import time
 import datetime as dt
 from typing import List, Optional, Tuple
 import traceback
+import re
 
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -194,11 +195,32 @@ def save_debug(driver: webdriver.Chrome, name: str):
         driver: The Selenium WebDriver instance.
         name: A descriptive name for the saved files (e.g., "login_page").
     """
+    # If running in CI (GitHub Actions), do not write debug HTML/screenshots to disk
+    if os.getenv("CI") or os.getenv("GITHUB_ACTIONS"):
+        print(f"[DEBUG] Running in CI - skipping debug file write for {name}", flush=True)
+        return
+
     try:
         html = driver.page_source
+        # sanitize page HTML to avoid leaking credentials or tokens
+        try:
+            safe_html = sanitize_html(html)
+        except Exception:
+            safe_html = html
+        # redact any literal occurrences of credentials from environment
+        try:
+            redacted_login = (LOGIN or "")
+            redacted_password = (PASSWORD or "")
+            if redacted_login:
+                safe_html = safe_html.replace(redacted_login, "[REDACTED]")
+            if redacted_password:
+                safe_html = safe_html.replace(redacted_password, "[REDACTED]")
+        except Exception:
+            pass
+
         with open(f"{name}.html", "w", encoding="utf-8") as f:
-            f.write(html)
-        print(f"[DEBUG] Saved {name}.html", flush=True)
+            f.write(safe_html)
+        print(f"[DEBUG] Saved {name}.html (sanitized)", flush=True)
     except Exception as e:
         print(f"[DEBUG] Failed to save {name}.html: {e}", flush=True)
 
@@ -207,6 +229,30 @@ def save_debug(driver: webdriver.Chrome, name: str):
         print(f"[DEBUG] Saved {name}.png", flush=True)
     except Exception as e:
         print(f"[DEBUG] Failed to save {name}.png: {e}", flush=True)
+
+
+def sanitize_html(html: str) -> str:
+    """Return a sanitized copy of HTML with input values and common tokens removed.
+
+    This is defensive and best-effort. It removes value attributes from <input>
+    elements, strips common CSRF/meta tags, and redacts likely token-like keys
+    in scripts and attributes.
+    """
+    try:
+        # remove value="..." or value='...' for input tags (simple removal)
+        html = re.sub(r"(<input\b[^>]*?)\svalue=(\".*?\"|'.*?'|[^>\s>]+)", r"\1", html, flags=re.I|re.S)
+
+        # Remove common meta tags that may contain CSRF tokens
+        html = re.sub(r"<meta[^>]+(csrf|csrf-token|csrf_param|xsrf)[^>]*>", "", html, flags=re.I|re.S)
+
+        # Redact JS object entries like 'csrf': '...'
+        html = re.sub(r"([\'\"](?:csrf|csrfToken|csrf_token|auth_token|token|password|pwd)[\'\"]\s*:\s*)([\'\"]).*?([\'\"])",
+                      lambda m: m.group(1) + m.group(2) + "[REDACTED]" + m.group(3),
+                      html, flags=re.I|re.S)
+
+        return html
+    except Exception:
+        return html
 
 
 def smart_fill_login(driver: webdriver.Chrome, login: str, password: str):

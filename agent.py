@@ -25,21 +25,26 @@ Optional Environment Variables:
 -   `WAIT_TIMEOUT`: The timeout in seconds for Selenium waits (defaults to 30).
 """
 import os
-import time
-import datetime as dt
-from typing import List, Optional, Tuple
-import traceback
 import re
+import time
+import math
+import logging
+import datetime as dt
+from astral import moon as astral_moon
+from typing import List, Optional, Tuple
 
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.support.ui import Select
-from selenium.webdriver.chrome.options import Options
-from webdriver_manager.chrome import ChromeDriverManager
-from selenium.webdriver.chrome.service import Service as ChromeService
-import ephem
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    # Type-only imports for linters/typecheckers (not imported at runtime)
+    from selenium import webdriver  # pragma: no cover
+    from selenium.webdriver.common.by import By  # pragma: no cover
+    from selenium.webdriver.support.ui import WebDriverWait  # pragma: no cover
+    from selenium.webdriver.support import expected_conditions as EC  # pragma: no cover
+    from selenium.webdriver.support.ui import Select  # pragma: no cover
+    from selenium.webdriver.chrome.options import Options  # pragma: no cover
+    from selenium.webdriver.chrome.service import Service as ChromeService  # pragma: no cover
+
 
 # --- Configuration from Environment Variables ---
 
@@ -65,6 +70,7 @@ TEST_DATE = os.getenv("TEST_DATE")
 
 # If "true", "1", or "yes", the script will calculate the playlist but not perform any web actions
 DRY_RUN = os.getenv("DRY_RUN", "").strip().lower() in ("1", "true", "yes")
+SAVE_DEBUG = os.getenv("SAVE_DEBUG", "").strip().lower() in ("1", "true", "yes")
 
 # Playlist IDs for special logic (e.g., moon phases)
 SPECIAL_PLAYLIST = os.getenv("SPECIAL_PLAYLIST", "3045")
@@ -78,6 +84,85 @@ SAVE_BUTTON_TEXTS = [
 # Timeout for Selenium explicit waits (in seconds)
 WAIT_TIMEOUT = int(os.getenv("WAIT_TIMEOUT", "30"))
 
+# Configure logging
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
+logging.basicConfig(
+    level=getattr(logging, LOG_LEVEL, logging.INFO),
+    format="%(asctime)s %(levelname)s %(message)s",
+)
+logger = logging.getLogger("playlist_agent")
+_SENSITIVE_VALUES = [value for value in (LOGIN, PASSWORD) if value]
+
+
+class RedactingFilter(logging.Filter):
+    """Logging filter that redacts sensitive values from log messages and exception text.
+
+    It replaces any literal occurrences of configured sensitive values with "[REDACTED]".
+    This is best-effort: it runs on the LogRecord before formatting.
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        try:
+            # Get the formatted message (may use msg and args) and redact secrets
+            try:
+                original = record.getMessage()
+            except Exception:
+                # Fallback to raw msg
+                original = str(record.msg)
+
+            redacted = original
+            for secret in _SENSITIVE_VALUES:
+                if secret:
+                    redacted = redacted.replace(secret, "[REDACTED]")
+
+            # Overwrite the record message and clear args to avoid reformatting secrets
+            record.msg = redacted
+            record.args = ()
+
+            # If exc_text exists (pre-formatted exception), redact it too
+            if getattr(record, "exc_text", None):
+                exc = str(record.exc_text)
+                for secret in _SENSITIVE_VALUES:
+                    if secret:
+                        exc = exc.replace(secret, "[REDACTED]")
+                record.exc_text = exc
+        except Exception:
+            # Do not block logging on filter errors
+            pass
+        return True
+
+
+# Install the redacting filter on the agent logger and all existing handlers so
+# redaction happens regardless of how logging is configured elsewhere.
+redacting_filter = RedactingFilter()
+logger.addFilter(redacting_filter)
+for h in logging.root.handlers:
+    h.addFilter(redacting_filter)
+
+
+def _redact(message: str) -> str:
+    """Redacts sensitive values from a log message.
+
+    Args:
+        message: The original log message.
+    Returns:
+        The redacted message.
+    """
+    sanitized = str(message)
+    for secret in _SENSITIVE_VALUES:
+        sanitized = sanitized.replace(secret, "[REDACTED]")
+    return sanitized
+
+
+def _log(level: int, message: str):
+    """Logs a message at the specified level with redaction.
+
+    Args:
+        level: The logging level (e.g., logging.INFO).
+        message: The log message.
+    """
+    logger.log(level, _redact(message))
+
 
 def lunar_day(today_utc: Optional[dt.datetime] = None) -> int:
     """
@@ -90,17 +175,16 @@ def lunar_day(today_utc: Optional[dt.datetime] = None) -> int:
         The day of the lunar month (0-29).
     """
     if today_utc is None:
-        today_utc = dt.datetime.utcnow()
+        today_utc = dt.datetime.now(dt.timezone.utc)
 
-    # Find the date of the last new moon
-    prev_new_moon = ephem.previous_new_moon(today_utc)
-    prev_dt = prev_new_moon.datetime()
-
-    # Calculate the age of the moon in days
-    age = today_utc - prev_dt
-    day = int(age.total_seconds() // 86400)  # 86400 seconds in a day
-
-    return day % 30
+    # astral.moon.phase returns the moon age in days (float, ~0-29.5)
+    try:
+        phase = astral_moon.phase(today_utc)
+        day = int(math.floor(phase))
+        return day % 30
+    except Exception:
+        # Fallback: use day of month modulo 30 if astral fails
+        return today_utc.day % 30
 
 
 def _is_phase_date(date_dt: dt.datetime) -> bool:
@@ -115,24 +199,20 @@ def _is_phase_date(date_dt: dt.datetime) -> bool:
     Returns:
         True if the date is a major moon phase, False otherwise.
     """
-    # List of ephem functions to get previous and next major moon phases
-    phase_functions = [
-        ephem.previous_new_moon, ephem.next_new_moon,
-        ephem.previous_full_moon, ephem.next_full_moon,
-        ephem.previous_first_quarter_moon, ephem.next_first_quarter_moon,
-        ephem.previous_last_quarter_moon, ephem.next_last_quarter_moon,
-    ]
-
-    for func in phase_functions:
-        try:
-            # Get the datetime of the phase
-            phase_time = func(date_dt).datetime()
-            # Check if the date matches the input date
-            if phase_time.date() == date_dt.date():
-                return True
-        except Exception:
-            # Ignore errors if a function fails (e.g., for older ephem versions)
-            continue
+    # Use astral.moon.phase to get moon age (days). We'll treat dates close
+    # to canonical phase ages (new=0, first~7, full~14, last~21) as phase dates.
+    try:
+        phase = astral_moon.phase(date_dt)
+        # Round to nearest integer day
+        rounded = int(round(phase)) % 30
+        # canonical major phases
+        major = {0, 7, 14, 21}
+        # Tolerance (days) around the canonical value
+        tol = 0.8
+        if rounded in major and abs(phase - rounded) <= tol:
+            return True
+    except Exception:
+        pass
     return False
 
 
@@ -168,38 +248,49 @@ def select_playlist_for_day(ids: List[str], day: int, date_dt: dt.datetime) -> T
     return ids[index], index
 
 
-def build_driver() -> webdriver.Chrome:
+def build_driver():
     """
     Builds and configures the Selenium Chrome WebDriver.
 
     Returns:
         A configured instance of the Chrome WebDriver.
     """
-    print("[DEBUG] Starting Chrome driver build...", flush=True)
+    _log(logging.DEBUG, "Starting Chrome driver build...")
+    # Import selenium at runtime to avoid import-time dependency errors
+    from selenium import webdriver
+    from selenium.webdriver.chrome.options import Options
+    from selenium.webdriver.chrome.service import Service as ChromeService
+
     options = Options()
     options.add_argument("--headless=new")  # Run in headless mode
     options.add_argument("--no-sandbox")  # Required for running as root in Docker
     options.add_argument("--disable-dev-shm-usage")  # Overcome limited resource problems
     options.add_argument("--window-size=1200,900")  # Set a reasonable window size
-    service = ChromeService(ChromeDriverManager().install())
-    driver = webdriver.Chrome(service=service, options=options)
-    print("[DEBUG] Chrome driver started.", flush=True)
+    chromedriver_path = os.getenv("CHROMEDRIVER")
+    if chromedriver_path:
+        service = ChromeService(executable_path=chromedriver_path)
+        driver = webdriver.Chrome(service=service, options=options)
+    else:
+        driver = webdriver.Chrome(options=options)
+    _log(logging.DEBUG, "Chrome driver started.")
     return driver
 
 
-def save_debug(driver: webdriver.Chrome, name: str):
+def save_debug(driver, name: str):
     """
-    Saves the page source and a screenshot for debugging purposes.
-
+    Saves the current page's HTML and a screenshot for debugging purposes.
+    
     Args:
         driver: The Selenium WebDriver instance.
-        name: A descriptive name for the saved files (e.g., "login_page").
+        name: A base name for the saved files (without extension).
     """
-    # If running in CI (GitHub Actions), do not write debug HTML/screenshots to disk
-    if os.getenv("CI") or os.getenv("GITHUB_ACTIONS"):
-        print(f"[DEBUG] Running in CI - skipping debug file write for {name}", flush=True)
-        return
 
+    if not SAVE_DEBUG:
+        _log(logging.DEBUG, f"Debug capture disabled; skipping {name}")
+        return
+    if os.getenv("CI") or os.getenv("GITHUB_ACTIONS"):
+        _log(logging.DEBUG, f"CI detected; skipping debug capture for {name}")
+        return
     try:
         html = driver.page_source
         # sanitize page HTML to avoid leaking credentials or tokens
@@ -220,15 +311,14 @@ def save_debug(driver: webdriver.Chrome, name: str):
 
         with open(f"{name}.html", "w", encoding="utf-8") as f:
             f.write(safe_html)
-        print(f"[DEBUG] Saved {name}.html (sanitized)", flush=True)
+        _log(logging.DEBUG, f"Saved {name}.html (sanitized)")
     except Exception as e:
-        print(f"[DEBUG] Failed to save {name}.html: {e}", flush=True)
-
+        _log(logging.WARNING, f"Failed to save {name}.html: {e}")
     try:
         driver.save_screenshot(f"{name}.png")
-        print(f"[DEBUG] Saved {name}.png", flush=True)
+        _log(logging.DEBUG, f"Saved {name}.png")
     except Exception as e:
-        print(f"[DEBUG] Failed to save {name}.png: {e}", flush=True)
+        _log(logging.WARNING, f"Failed to save {name}.png: {e}")
 
 
 def sanitize_html(html: str) -> str:
@@ -250,12 +340,35 @@ def sanitize_html(html: str) -> str:
                       lambda m: m.group(1) + m.group(2) + "[REDACTED]" + m.group(3),
                       html, flags=re.I|re.S)
 
+        # Redact Authorization headers and Bearer tokens
+        html = re.sub(r"(Authorization\s*:\s*)(Bearer|Basic)\s+[^\s\"'>]+", r"\1\2 [REDACTED]", html, flags=re.I)
+
+        # Redact JWT-like tokens (three dot separated base64-ish parts)
+        html = re.sub(r"\b[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b", "[REDACTED]", html)
+
+        # Common cookie/session/token patterns (query params, cookie-like strings)
+        html = re.sub(
+            r"(([?&](?:token|access_token|auth_token|session|sid|sess)[^=]*=))([^&\s\"'>#]+)",
+            lambda m: m.group(1) + "[REDACTED]",
+            html,
+            flags=re.I,
+        )
+
+        html = re.sub(
+            r"((?:session|token|auth)[^=]{0,8}=)([^;&\s]+)",
+            lambda m: m.group(1) + "[REDACTED]",
+            html,
+            flags=re.I,
+        )
+
+        # Redact specific data-* attributes that commonly hold tokens
+        html = re.sub(r"(data-(?:token|auth|session)[^=]*=[\"']).*?([\"'])", lambda m: m.group(1) + "[REDACTED]" + m.group(2), html, flags=re.I|re.S)
         return html
     except Exception:
         return html
 
 
-def smart_fill_login(driver: webdriver.Chrome, login: str, password: str):
+def smart_fill_login(driver, login: str, password: str):
     """
     Intelligently finds and fills the login form.
 
@@ -266,6 +379,11 @@ def smart_fill_login(driver: webdriver.Chrome, login: str, password: str):
         login: The username.
         password: The password.
     """
+    # Import required selenium symbols at runtime
+    from selenium.webdriver.common.by import By
+    from selenium.webdriver.support.ui import WebDriverWait
+    from selenium.webdriver.support import expected_conditions as EC
+
     wait = WebDriverWait(driver, WAIT_TIMEOUT)
     driver.get(LOGIN_URL)
     save_debug(driver, "login_page")
@@ -346,10 +464,10 @@ def smart_fill_login(driver: webdriver.Chrome, login: str, password: str):
     except Exception:
         # If the URL doesn't change, log a warning and continue
         save_debug(driver, "after_login_no_redirect")
-        print("[WARN] No redirect detected after login; continuing to TARGET_URL", flush=True)
+        _log(logging.WARNING, "No redirect detected after login; continuing to TARGET_URL")
 
 
-def change_playlist(driver: webdriver.Chrome, playlist_id: str):
+def change_playlist(driver, playlist_id: str):
     """
     Finds the playlist selector, changes its value, and saves the change.
 
@@ -357,6 +475,10 @@ def change_playlist(driver: webdriver.Chrome, playlist_id: str):
         driver: The Selenium WebDriver instance.
         playlist_id: The ID of the playlist to select.
     """
+    from selenium.webdriver.common.by import By
+    from selenium.webdriver.support.ui import WebDriverWait
+    from selenium.webdriver.support.ui import Select
+
     wait = WebDriverWait(driver, WAIT_TIMEOUT)
     driver.get(TARGET_URL)
     save_debug(driver, "target_page")
@@ -466,28 +588,27 @@ def main():
         except ValueError:
             date_dt = dt.datetime.strptime(TEST_DATE, '%Y-%m-%d')
         day = lunar_day(date_dt)
-        print(f"[DEBUG] Using TEST_DATE={TEST_DATE} -> lunar day={day}")
+        _log(logging.DEBUG, f"Using TEST_DATE={TEST_DATE} -> lunar day={day}")
     else:
-        date_dt = dt.datetime.utcnow()
+        date_dt = dt.datetime.now(dt.timezone.utc)
         day = lunar_day(date_dt)
 
     # Select the playlist for the determined date
     playlist_id, bucket = select_playlist_for_day(PLAYLIST_IDS, day, date_dt)
-    print(f"[INFO] Selected playlist_id (lunar calendar): {playlist_id} (bucket={bucket}, day={day})")
-
+    _log(logging.INFO, f"Selected playlist_id (lunar calendar): {playlist_id} (bucket={bucket}, day={day})")
     if DRY_RUN:
-        print("[DRY RUN] Exiting without running Selenium.")
+        _log(logging.INFO, "DRY RUN enabled, skipping Selenium.")
         return
 
     # --- Run Selenium Automation ---
     driver = None
     try:
         driver = build_driver()
-        print("[INFO] Logging in…")
+        _log(logging.INFO, "Logging in…")
         smart_fill_login(driver, LOGIN, PASSWORD)
-        print("[INFO] Changing playlist…")
+        _log(logging.INFO, "Changing playlist…")
         change_playlist(driver, playlist_id)
-        print("[OK] Done.")
+        _log(logging.INFO, "Done.")
     finally:
         if driver:
             driver.quit()

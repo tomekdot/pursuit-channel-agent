@@ -27,7 +27,7 @@ This repository contains a small, self-contained Python agent and a GitHub Actio
 
 ## 🧰 Running locally
 
-Recommended Python: 3.11 (the GitHub Actions workflow uses 3.11 and prebuilt wheels are available for dependencies).
+Recommended Python: 3.14 (the GitHub Actions workflow uses 3.14 and prebuilt wheels are available for dependencies).
 
 Create and activate a virtual environment and install dependencies:
 

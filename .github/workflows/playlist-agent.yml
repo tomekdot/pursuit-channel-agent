@@ -24,8 +24,8 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          # Use a modern Python runtime; 3.11 is recommended for CI
-          python-version: '3.11'
+          # Use Python 3.14 per request
+          python-version: '3.14'
 
       - name: Install Chrome
         uses: browser-actions/setup-chrome@v1

@@ -5,6 +5,4 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
-    default-reviewers: []
-    # Optionally ignore major versions for some packages
-    ignore: []
+    # The 'default-reviewers' and 'ignore' fields have been removed to conform to the schema.

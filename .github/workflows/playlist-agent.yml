@@ -32,18 +32,26 @@ jobs:
         with:
           chrome-version: stable
 
+      - name: Check Chromedriver availability
+        id: check
+        env:
+          CHROMEDRIVER_URL: ${{ secrets.CHROMEDRIVER_URL }}
+        run: |
+          if [ -n "$CHROMEDRIVER_URL" ]; then
+            echo "has_chromedriver=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_chromedriver=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: "Optional: download & verify Chromedriver"
+        if: steps.check.outputs.has_chromedriver == 'true'
         # Accept CHROMEDRIVER_URL and CHROMEDRIVER_SHA256 as repository secrets.
-        # If CHROMEDRIVER_URL is not provided, this step is skipped (no-op).
+        # If CHROMEDRIVER_URL is not provided, this step is skipped.
         env:
           CHROMEDRIVER_URL: ${{ secrets.CHROMEDRIVER_URL }}
           CHROMEDRIVER_SHA256: ${{ secrets.CHROMEDRIVER_SHA256 }}
         run: |
           set -euo pipefail
-          if [ -z "${CHROMEDRIVER_URL:-}" ]; then
-            echo "CHROMEDRIVER_URL not set; skipping Chromedriver download/verification."
-            exit 0
-          fi
           tmpfile=$(mktemp)
           echo "Downloading Chromedriver from: $CHROMEDRIVER_URL"
           curl -fsSL "$CHROMEDRIVER_URL" -o "$tmpfile"

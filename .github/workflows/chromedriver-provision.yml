@@ -22,6 +22,8 @@ jobs:
           sudo apt-get install -y unzip file
 
       - name: Download & verify Chromedriver
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           CHROMEDRIVER_URL=$(gh variable get CHROMEDRIVER_URL --repo ${{ github.repository }} || echo "")

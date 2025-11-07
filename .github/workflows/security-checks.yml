@@ -1,0 +1,42 @@
+name: Security checks
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+
+jobs:
+  security-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies for scanning
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pip-audit bandit semgrep
+
+      - name: Install project dependencies (for pip-audit)
+        run: |
+          python -m pip install -r requirements.txt
+
+      - name: Run pip-audit (dependency CVEs)
+        run: |
+          python -m pip_audit
+
+      - name: Run Bandit (static security analysis)
+        run: |
+          bandit -r . -lll
+
+      - name: Run Semgrep (pattern-based checks)
+        run: |
+          semgrep --config=auto . || true

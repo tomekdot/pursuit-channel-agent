@@ -14,11 +14,9 @@ jobs:
     # it does not run on pull_request events, so no runtime pull_request
     # context checks are necessary here.
     runs-on: ubuntu-latest
-    env:
-      # Job-level variables for Chromedriver provisioning. These use repository
-      # variables; if you prefer secrets, replace vars.* with secrets.*.
-      CHROMEDRIVER_URL: ${{ vars.CHROMEDRIVER_URL }}
-      CHROMEDRIVER_SHA256: ${{ vars.CHROMEDRIVER_SHA256 }}
+    # Intentionally keep this job free of repository-level `vars` expressions
+    # that can trigger editor schema warnings. Chromedriver provisioning is
+    # handled by a separate manual workflow (`chromedriver-provision.yml`).
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -37,59 +35,10 @@ jobs:
         with:
           chrome-version: stable
 
-      - name: Check Chromedriver availability
-        id: check
-        run: |
-          if [ -n "$CHROMEDRIVER_URL" ]; then
-            echo "has_chromedriver=true" >> $GITHUB_OUTPUT
-          else
-            echo "has_chromedriver=false" >> $GITHUB_OUTPUT
-          fi
-
-      - name: "Optional: download & verify Chromedriver"
-        if: steps.check.outputs.has_chromedriver == 'true'
-        run: |
-          set -euo pipefail
-          if [ -z "${CHROMEDRIVER_URL:-}" ]; then
-            echo "CHROMEDRIVER_URL not set; skipping Chromedriver download/verification."
-            exit 0
-          fi
-          tmpfile=$(mktemp)
-          echo "Downloading Chromedriver from: $CHROMEDRIVER_URL"
-          curl -fsSL "$CHROMEDRIVER_URL" -o "$tmpfile"
-          if [ -n "${CHROMEDRIVER_SHA256:-}" ]; then
-            echo "Verifying SHA256 checksum..."
-            printf "%s  %s\n" "$CHROMEDRIVER_SHA256" "$tmpfile" > checksum.txt
-            sha256sum -c checksum.txt
-          else
-            echo "No CHROMEDRIVER_SHA256 provided; skipping checksum verification."
-          fi
-          mkdir -p chromedriver
-          # Try to unpack zip or tar.gz; fall back to placing the file as-is
-          mime="$(file -b --mime-type "$tmpfile" || true)"
-          if echo "$mime" | grep -qi zip; then
-            unzip -q "$tmpfile" -d chromedriver
-          else
-            if tar -tzf "$tmpfile" >/dev/null 2>&1; then
-              tar -xzf "$tmpfile" -C chromedriver
-            else
-              # Not an archive we recognize; move into chromedriver dir
-              mv "$tmpfile" chromedriver/
-            fi
-          fi
-          # Locate binary and make executable
-          driver_path="$(find chromedriver -type f -name 'chromedriver*' -print -quit || true)"
-          if [ -z "$driver_path" ]; then
-            driver_path="$(find chromedriver -type f -print -quit || true)"
-          fi
-          if [ -n "$driver_path" ]; then
-            chmod +x "$driver_path" || true
-            echo "CHROMEDRIVER=$PWD/$driver_path" >> $GITHUB_ENV
-            echo "Chromedriver installed at $PWD/$driver_path"
-          else
-            echo "Could not find chromedriver binary after extraction" >&2
-            exit 1
-          fi
+      # Chromedriver provisioning is intentionally removed from this main
+      # workflow to avoid editor schema warnings about `${{ vars.* }}` usage.
+      # Use the `chromedriver-provision` manual workflow to produce a
+      # verified artifact when you want to make a chromedriver available.
 
       - name: Install deps
         run: |

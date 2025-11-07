@@ -1,6 +1,6 @@
-# 🌙 Maniaplanet Playlist Agent
+# 🌙 ManiaPlanet Playlist Agent
 
-Automatic agent that logs into Maniaplanet and sets a playlist on a schedule. The agent selects playlists using a lunar-calendar rule (lunar day 0–29) and automates the web UI using Selenium. The project  uses the `astral` library for lunar calculations.
+Automatic agent that logs into ManiaPlanet and sets a playlist on a schedule. The agent selects playlists using a lunar-calendar rule (lunar day 0–29) and automates the web UI using Selenium. The project  uses the `astral` library for lunar calculations.
 
 This repository contains a small, self-contained Python agent and a GitHub Actions workflow to run it on a schedule (default: daily 08:00 UTC). The code is structured so it can be imported for testing without installing Selenium (Selenium imports are performed at runtime inside functions).
 
@@ -14,7 +14,7 @@ This repository contains a small, self-contained Python agent and a GitHub Actio
 
 1. Fork or create a repository and push these files (`agent.py`, `requirements.txt`, `.github/workflows/playlist-agent.yml`, `README.md`).
 2. 🔐 Add repository secrets (Settings → Secrets and variables → Actions → *New repository secret*):
-   - `MANIAPLANET_LOGIN` – your Maniaplanet login
+   - `MANIAPLANET_LOGIN` – your ManiaPlanet login
    - `MANIAPLANET_PASSWORD` – your password
 
 3. (Optional) Add repository variables or override via Actions/environment:

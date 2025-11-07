@@ -1,0 +1,72 @@
+name: Chromedriver provisioning
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  provision:
+    runs-on: ubuntu-latest
+    # Removed env vars to avoid editor warnings; vars are read in the script
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Install tools
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y unzip file
+
+      - name: Download & verify Chromedriver
+        run: |
+          set -euo pipefail
+          CHROMEDRIVER_URL=$(gh variable get CHROMEDRIVER_URL --repo ${{ github.repository }} || echo "")
+          CHROMEDRIVER_SHA256=$(gh variable get CHROMEDRIVER_SHA256 --repo ${{ github.repository }} || echo "")
+          if [ -z "$CHROMEDRIVER_URL" ]; then
+            echo "CHROMEDRIVER_URL not configured. Set repository variable 'CHROMEDRIVER_URL' and re-run." >&2
+            exit 1
+          fi
+          tmpfile=$(mktemp)
+          echo "Downloading Chromedriver from: $CHROMEDRIVER_URL"
+          curl -fsSL "$CHROMEDRIVER_URL" -o "$tmpfile"
+          if [ -n "$CHROMEDRIVER_SHA256" ]; then
+            echo "Verifying SHA256 checksum..."
+            printf "%s  %s\n" "$CHROMEDRIVER_SHA256" "$tmpfile" > checksum.txt
+            sha256sum -c checksum.txt
+          else
+            echo "No CHROMEDRIVER_SHA256 provided; skipping checksum verification."
+          fi
+          mkdir -p chromedriver
+          mime="$(file -b --mime-type "$tmpfile" || true)"
+          if echo "$mime" | grep -qi zip; then
+            unzip -q "$tmpfile" -d chromedriver
+          else
+            if tar -tzf "$tmpfile" >/dev/null 2>&1; then
+              tar -xzf "$tmpfile" -C chromedriver
+            else
+              mv "$tmpfile" chromedriver/
+            fi
+          fi
+          driver_path="$(find chromedriver -type f -name 'chromedriver*' -print -quit || true)"
+          if [ -z "$driver_path" ]; then
+            driver_path="$(find chromedriver -type f -print -quit || true)"
+          fi
+          if [ -n "$driver_path" ]; then
+            chmod +x "$driver_path" || true
+            echo "Found chromedriver at $driver_path"
+            ls -la "$(dirname "$driver_path")"
+          else
+            echo "Could not find chromedriver binary after extraction" >&2
+            exit 1
+          fi
+
+      - name: Upload chromedriver artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: chromedriver
+          path: chromedriver/
+          retention-days: 7

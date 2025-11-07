@@ -24,9 +24,11 @@ Optional Environment Variables:
 -   `DRY_RUN`: If set to "1", "true", or "yes", the script will only print the selected playlist and exit.
 -   `WAIT_TIMEOUT`: The timeout in seconds for Selenium waits (defaults to 30).
 """
+
 __version__ = "1.0.0"
 __author__ = "tomekdot"
 __description__ = "Automated ManiaPlanet playlist updater based on lunar phases."
+
 import os
 import re
 import math

@@ -76,4 +76,4 @@ managers reasonable time to apply patches.
 If you'd like, I can update this file to include a real contact email or
 PGP key and translate any parts to English as well. Tell me the contact
 email you want published (or confirm you want to use GitHub Security
-Advisories only) and I'll update the file accordingly.
+Advisories only), and any other details to include.

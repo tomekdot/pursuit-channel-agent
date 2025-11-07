@@ -14,6 +14,11 @@ jobs:
     # it does not run on pull_request events, so no runtime pull_request
     # context checks are necessary here.
     runs-on: ubuntu-latest
+    env:
+      # Job-level variables for Chromedriver provisioning. These use repository
+      # variables; if you prefer secrets, replace vars.* with secrets.*.
+      CHROMEDRIVER_URL: ${{ vars.CHROMEDRIVER_URL }}
+      CHROMEDRIVER_SHA256: ${{ vars.CHROMEDRIVER_SHA256 }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -34,8 +39,6 @@ jobs:
 
       - name: Check Chromedriver availability
         id: check
-        env:
-          CHROMEDRIVER_URL: ${{ secrets.CHROMEDRIVER_URL }}
         run: |
           if [ -n "$CHROMEDRIVER_URL" ]; then
             echo "has_chromedriver=true" >> $GITHUB_OUTPUT
@@ -45,13 +48,12 @@ jobs:
 
       - name: "Optional: download & verify Chromedriver"
         if: steps.check.outputs.has_chromedriver == 'true'
-        # Accept CHROMEDRIVER_URL and CHROMEDRIVER_SHA256 as repository secrets.
-        # If CHROMEDRIVER_URL is not provided, this step is skipped.
-        env:
-          CHROMEDRIVER_URL: ${{ secrets.CHROMEDRIVER_URL }}
-          CHROMEDRIVER_SHA256: ${{ secrets.CHROMEDRIVER_SHA256 }}
         run: |
           set -euo pipefail
+          if [ -z "${CHROMEDRIVER_URL:-}" ]; then
+            echo "CHROMEDRIVER_URL not set; skipping Chromedriver download/verification."
+            exit 0
+          fi
           tmpfile=$(mktemp)
           echo "Downloading Chromedriver from: $CHROMEDRIVER_URL"
           curl -fsSL "$CHROMEDRIVER_URL" -o "$tmpfile"
@@ -100,15 +102,16 @@ jobs:
           DRY_RUN=1 python -u agent.py
 
       - name: Run agent (debug)
-        env:
-          LOGIN: ${{ secrets.MANIAPLANET_LOGIN }}
-          PASSWORD: ${{ secrets.MANIAPLANET_PASSWORD }}
-          TARGET_URL: ${{ vars.TARGET_URL }}
-          LOGIN_URL: ${{ vars.LOGIN_URL }}
-          PLAYLIST_IDS: ${{ vars.PLAYLIST_IDS }}
-          WAIT_TIMEOUT: 60
-          PYTHONUNBUFFERED: 1
+        # Set secrets/vars inside the run script to reduce editor diagnostics
         run: |
+          # Export required environment values into the runner environment
+          echo "LOGIN=${{ secrets.MANIAPLANET_LOGIN }}" >> $GITHUB_ENV
+          echo "PASSWORD=${{ secrets.MANIAPLANET_PASSWORD }}" >> $GITHUB_ENV
+          echo "TARGET_URL=${{ vars.TARGET_URL }}" >> $GITHUB_ENV
+          echo "LOGIN_URL=${{ vars.LOGIN_URL }}" >> $GITHUB_ENV
+          echo "PLAYLIST_IDS=${{ vars.PLAYLIST_IDS }}" >> $GITHUB_ENV
+          echo "WAIT_TIMEOUT=60" >> $GITHUB_ENV
+          echo "PYTHONUNBUFFERED=1" >> $GITHUB_ENV
           python -u agent.py 2>&1 | tee agent.log
 
       - name: Upload agent logs (on failure)

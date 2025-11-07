@@ -5,4 +5,5 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
-    # The 'default-reviewers' and 'ignore' fields have been removed to conform to the schema.
+    allow:
+      - dependency-type: "all"

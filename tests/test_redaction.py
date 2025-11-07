@@ -4,7 +4,7 @@ import logging
 
 
 def test_traceback_redaction():
-    secret = "MY_TEST_SECRET_123"
+    secret = "<MY_TEST_SECRET_123>" 
     if secret not in agent._SENSITIVE_VALUES:
         agent._SENSITIVE_VALUES.append(secret)
 
@@ -16,9 +16,9 @@ def test_traceback_redaction():
 
     try:
         try:
-            raise ValueError(f"boom with secret {secret}")
+            raise ValueError(f"An error occurred with secret {secret}")
         except Exception:
-            logger.exception("caught error")
+            logger.exception("An error occurred")
 
         output = stream.getvalue()
         assert secret not in output

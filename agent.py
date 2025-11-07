@@ -24,16 +24,18 @@ Optional Environment Variables:
 -   `DRY_RUN`: If set to "1", "true", or "yes", the script will only print the selected playlist and exit.
 -   `WAIT_TIMEOUT`: The timeout in seconds for Selenium waits (defaults to 30).
 """
+__version__ = "1.0.0"
+__author__ = "tomekdot"
+__description__ = "Automated ManiaPlanet playlist updater based on lunar phases."
 import os
 import re
-import time
 import math
+import time
 import logging
 import datetime as dt
 from astral import moon as astral_moon
 from typing import List, Optional, Tuple
-
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     # Type-only imports for linters/typecheckers (not imported at runtime)
@@ -72,6 +74,10 @@ TEST_DATE = os.getenv("TEST_DATE")
 DRY_RUN = os.getenv("DRY_RUN", "").strip().lower() in ("1", "true", "yes")
 SAVE_DEBUG = os.getenv("SAVE_DEBUG", "").strip().lower() in ("1", "true", "yes")
 
+# Allow enabling debug explicitly only for local runs when explicitly allowed.
+# This prevents accidentally enabling SAVE_DEBUG in CI and leaking artifacts.
+ALLOW_LOCAL_DEBUG = os.getenv("ALLOW_LOCAL_DEBUG", "").strip().lower() in ("1", "true", "yes")
+
 # Playlist IDs for special logic (e.g., moon phases)
 SPECIAL_PLAYLIST = os.getenv("SPECIAL_PLAYLIST", "3045")
 DEFAULT_PLAYLIST = os.getenv("DEFAULT_PLAYLIST", "3029")
@@ -93,6 +99,11 @@ logging.basicConfig(
 logger = logging.getLogger("playlist_agent")
 _SENSITIVE_VALUES = [value for value in (LOGIN, PASSWORD) if value]
 
+# Enforce safe defaults: do not allow SAVE_DEBUG in CI unless explicitly allowed
+if (os.getenv("CI") or os.getenv("GITHUB_ACTIONS")) and SAVE_DEBUG and not ALLOW_LOCAL_DEBUG:
+    # Fail fast to avoid accidentally saving debug artifacts in CI
+    raise RuntimeError("SAVE_DEBUG is not allowed in CI environments. To override (not recommended), set ALLOW_LOCAL_DEBUG=1 locally.")
+
 
 class RedactingFilter(logging.Filter):
     """Logging filter that redacts sensitive values from log messages and exception text.
@@ -100,7 +111,6 @@ class RedactingFilter(logging.Filter):
     It replaces any literal occurrences of configured sensitive values with "[REDACTED]".
     This is best-effort: it runs on the LogRecord before formatting.
     """
-
     def filter(self, record: logging.LogRecord) -> bool:
         try:
             # Get the formatted message (may use msg and args) and redact secrets
@@ -138,6 +148,43 @@ redacting_filter = RedactingFilter()
 logger.addFilter(redacting_filter)
 for h in logging.root.handlers:
     h.addFilter(redacting_filter)
+
+
+# Formatter that redacts secrets from formatted messages and exception text.
+class RedactingFormatter(logging.Formatter):
+    """Formatter that redacts configured sensitive values from output.
+
+    This overrides formatException to ensure tracebacks are also redacted.
+    """
+    def formatException(self, exc_info):
+        try:
+            text = super().formatException(exc_info)
+        except Exception:
+            # Fallback to default
+            text = logging.Formatter().formatException(exc_info)
+        for secret in _SENSITIVE_VALUES:
+            if secret:
+                text = text.replace(secret, "[REDACTED]")
+        return text
+
+    def format(self, record: logging.LogRecord) -> str:
+        s = super().format(record)
+        for secret in _SENSITIVE_VALUES:
+            if secret:
+                s = s.replace(secret, "[REDACTED]")
+        return s
+
+
+# Attach redacting formatter to existing root handlers (preserve existing format if set)
+for h in logging.root.handlers:
+    try:
+        fmt = h.formatter._fmt if getattr(h, "formatter", None) else "%(asctime)s %(levelname)s %(message)s"
+        h.setFormatter(RedactingFormatter(fmt))
+    except Exception:
+        try:
+            h.setFormatter(RedactingFormatter("%(asctime)s %(levelname)s %(message)s"))
+        except Exception:
+            pass
 
 
 def _redact(message: str) -> str:
@@ -267,7 +314,22 @@ def build_driver():
     options.add_argument("--disable-dev-shm-usage")  # Overcome limited resource problems
     options.add_argument("--window-size=1200,900")  # Set a reasonable window size
     chromedriver_path = os.getenv("CHROMEDRIVER")
+    # Optional runtime Chromedriver hash verification (set CHROMEDRIVER_HASH env var)
+    def _verify_chromedriver(path: str, expected_sha256: Optional[str] = None):
+        if not expected_sha256 or not path or not os.path.exists(path):
+            return
+        try:
+            import hashlib
+            with open(path, "rb") as f:
+                digest = hashlib.sha256(f.read()).hexdigest()
+            if digest != expected_sha256:
+                raise RuntimeError(f"Chromedriver hash mismatch: expected={expected_sha256[:12]}..., got={digest[:12]}...")
+        except Exception:
+            # Propagate verification failures as hard errors to avoid using tampered binaries
+            raise
     if chromedriver_path:
+        # Optionally verify provided chromedriver binary if CHROMEDRIVER_HASH is set
+        _verify_chromedriver(chromedriver_path, os.getenv("CHROMEDRIVER_HASH"))
         service = ChromeService(executable_path=chromedriver_path)
         driver = webdriver.Chrome(service=service, options=options)
     else:
@@ -345,6 +407,15 @@ def sanitize_html(html: str) -> str:
 
         # Redact JWT-like tokens (three dot separated base64-ish parts)
         html = re.sub(r"\b[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b", "[REDACTED]", html)
+        # Redact common JS fetch() calls that include Authorization headers
+        html = re.sub(r"fetch\s*\([^)]*(Authorization|Bearer|token)[^)]*\)", "[REDACTED]", html, flags=re.I)
+
+        # Redact localStorage.setItem or sessionStorage usage storing tokens
+        html = re.sub(r"localStorage\.setItem\s*\([^)]*(token|auth|session)[^)]*\)", "[REDACTED]", html, flags=re.I)
+        html = re.sub(r"sessionStorage\.setItem\s*\([^)]*(token|auth|session)[^)]*\)", "[REDACTED]", html, flags=re.I)
+
+        # Redact patterns like: var token = '...'; or let token = "...";
+        html = re.sub(r"([\s;](?:var|let|const))\s+(?:token|auth|session)\s*=\s*['\"][^'\"]+['\"]", "[REDACTED]", html, flags=re.I)
 
         # Common cookie/session/token patterns (query params, cookie-like strings)
         html = re.sub(
@@ -465,6 +536,14 @@ def smart_fill_login(driver, login: str, password: str):
         # If the URL doesn't change, log a warning and continue
         save_debug(driver, "after_login_no_redirect")
         _log(logging.WARNING, "No redirect detected after login; continuing to TARGET_URL")
+    except Exception as e:
+        # Log the exception and capture debug artifacts to help diagnosis, then re-raise
+        logger.exception(f"Error while waiting for post-login redirect: {e}")
+        try:
+            save_debug(driver, "login_exception")
+        except Exception:
+            pass
+        raise
 
 
 def change_playlist(driver, playlist_id: str):
@@ -578,6 +657,10 @@ def main():
     """
     Main execution function for the script.
     """
+    try:
+        logger.info(f"Running v{__version__}")
+    except Exception:
+        pass
     if not DRY_RUN and (not LOGIN or not PASSWORD):
         raise RuntimeError("LOGIN/PASSWORD missing from environment variables.")
 

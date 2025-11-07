@@ -1,6 +1,6 @@
 # 🌙 Maniaplanet Playlist Agent
 
-Automatic agent that logs into Maniaplanet and sets a playlist on a schedule. The agent selects playlists using a lunar-calendar rule (lunar day 0–29) and automates the web UI using Selenium. The project now uses the `astral` library for lunar calculations (replacing `ephem`) so it doesn't require compiling C extensions.
+Automatic agent that logs into Maniaplanet and sets a playlist on a schedule. The agent selects playlists using a lunar-calendar rule (lunar day 0–29) and automates the web UI using Selenium. The project  uses the `astral` library for lunar calculations.
 
 This repository contains a small, self-contained Python agent and a GitHub Actions workflow to run it on a schedule (default: daily 08:00 UTC). The code is structured so it can be imported for testing without installing Selenium (Selenium imports are performed at runtime inside functions).
 
@@ -14,13 +14,13 @@ This repository contains a small, self-contained Python agent and a GitHub Actio
 
 1. Fork or create a repository and push these files (`agent.py`, `requirements.txt`, `.github/workflows/playlist-agent.yml`, `README.md`).
 2. 🔐 Add repository secrets (Settings → Secrets and variables → Actions → *New repository secret*):
-   - `MANIAPLANET_LOGIN` – your Maniaplanet login or email
+   - `MANIAPLANET_LOGIN` – your Maniaplanet login
    - `MANIAPLANET_PASSWORD` – your password
 
 3. (Optional) Add repository variables or override via Actions/environment:
    - `TARGET_URL` (default: `https://www.maniaplanet.com/programs/manager/106/episodes/106/playlist`)
    - `LOGIN_URL` (default: `https://www.maniaplanet.com/login`)
-   - `PLAYLIST_IDS` (comma-separated, e.g. `3029,3045`)
+   - `PLAYLIST_IDS` (comma-separated, e.g. `3029, 3045`)
    - `SPECIAL_PLAYLIST` / `DEFAULT_PLAYLIST` (alternate override values)
 
 4. Use the workflow `Run workflow` in Actions to test, or wait for the scheduled run (default: 08:00 UTC daily).
@@ -85,7 +85,6 @@ If the site requires extra confirmation steps or introduces CAPTCHA, the run wil
 - 📦 Pull requests welcome; keep changes small and include tests if possible.
 
 ## 🔒 Security & Privacy
-- Store credentials in GitHub Secrets only. Do not expose your password or saved HTML screenshots containing sensitive tokens.
  - Store credentials in GitHub Secrets only. Do not expose your password or saved HTML screenshots containing sensitive tokens. The agent redacts configured secrets from logs and sanitizes saved HTML, but sanitization is best-effort; avoid storing long-lived credentials in places that may be publicly accessible.
 
 ## 📝 License

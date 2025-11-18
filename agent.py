@@ -565,7 +565,25 @@ def change_playlist(driver, playlist_id: str):
     driver.get(TARGET_URL)
     save_debug(driver, "target_page")
 
+    # Optional: if the playlist selector lives inside an iframe, you can set
+    # PLAYLIST_IFRAME_SELECTOR to a CSS selector to switch into that iframe.
+    iframe_selector = os.getenv("PLAYLIST_IFRAME_SELECTOR")
+    if iframe_selector:
+        try:
+            _log(logging.DEBUG, f"Switching to iframe: {iframe_selector}")
+            iframe_el = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, iframe_selector)))
+            driver.switch_to.frame(iframe_el)
+        except Exception:
+            _log(logging.WARNING, f"PLAYLIST_IFRAME_SELECTOR did not match or could not switch: {iframe_selector}")
+
     # --- Find the Playlist <select> Element ---
+    # Allow overriding the target selector via an environment variable
+    override_selector = os.getenv("PLAYLIST_SELECT_SELECTOR")
+    if override_selector:
+        try:
+            target_select = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, override_selector)))
+        except Exception:
+            _log(logging.WARNING, f"PLAYLIST_SELECT_SELECTOR override did not match any element: {override_selector}")
     target_select = None
     # Try specific ID and name selectors first
     try:
@@ -591,12 +609,99 @@ def change_playlist(driver, playlist_id: str):
                 continue
 
     if not target_select:
+        # If we didn't find the select by option value, collect diagnostics about the
+        # available <select> elements and their options to aid troubleshooting.
+        selects = driver.find_elements(By.TAG_NAME, "select")
+        selects_info = []
+        for s in selects:
+            try:
+                sid = s.get_attribute("id") or s.get_attribute("name") or "<no-id>"
+                options = s.find_elements(By.TAG_NAME, "option")
+                opts = []
+                for o in options[:40]:
+                    try:
+                        opts.append({
+                            "value": o.get_attribute("value"),
+                            "text": o.text.strip(),
+                        })
+                    except Exception:
+                        continue
+                selects_info.append({"select": sid, "options": opts, "count": len(options)})
+            except Exception:
+                continue
+
+        # Save the debug HTML and include a JSON-ish diagnostics dump in the logs.
         save_debug(driver, "no_select")
-        raise RuntimeError(f"<select> with option value={playlist_id} not found. Update selectors.")
+        _log(logging.ERROR, f"Unable to find <select> containing option value={playlist_id}. Detected {len(selects_info)} <select> elements.")
+        for sel in selects_info:
+            _log(logging.DEBUG, f"Select: {sel['select']}, options={sel['count']}, sample={sel['options'][:6]}")
+
+        # Try a fallback: match by option visible text containing the playlist ID as substring
+        for sel in selects:
+            try:
+                for o in sel.find_elements(By.TAG_NAME, "option"):
+                    try:
+                        if playlist_id in (o.get_attribute("value") or ""):
+                            target_select = sel
+                            break
+                        if playlist_id in (o.text or ""):
+                            target_select = sel
+                            break
+                    except Exception:
+                        continue
+                if target_select:
+                    break
+            except Exception:
+                continue
+
+        if not target_select:
+            raise RuntimeError(
+                f"<select> with option value={playlist_id} not found. Update selectors. "
+                f"Detected {len(selects_info)} select(s). See debug artifact 'no_select' (saved HTML + screenshot)."
+            )
 
     # --- Change the Playlist Selection ---
+    # Determine which option value to select. Prefer exact value match, otherwise
+    # try to find option whose text or value contains the desired playlist_id.
+    actual_value_to_select = None
+    actual_text_to_select = None
     try:
-        Select(target_select).select_by_value(playlist_id)
+        options = target_select.find_elements(By.TAG_NAME, "option")
+        for o in options:
+            try:
+                val = o.get_attribute("value") or ""
+                txt = (o.text or "").strip()
+                if val == playlist_id:
+                    actual_value_to_select = val
+                    break
+            except Exception:
+                continue
+        if not actual_value_to_select:
+            # Try contains match
+            for o in options:
+                try:
+                    val = o.get_attribute("value") or ""
+                    txt = (o.text or "").strip()
+                    if playlist_id in val or playlist_id in txt:
+                        # Prefer value if available; otherwise fall back to visible text
+                        if val:
+                            actual_value_to_select = val
+                        else:
+                            actual_text_to_select = txt
+                        break
+                except Exception:
+                    continue
+    except Exception:
+        pass
+
+    try:
+        if actual_value_to_select:
+            Select(target_select).select_by_value(actual_value_to_select)
+        elif actual_text_to_select:
+            Select(target_select).select_by_visible_text(actual_text_to_select)
+        else:
+            # Fall back to selecting by exactly visible text matching the id
+            Select(target_select).select_by_visible_text(playlist_id)
     except Exception:
         # If the standard Select helper fails, try using JavaScript
         try:

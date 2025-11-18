@@ -17,6 +17,20 @@ This repository contains a small, self-contained Python agent and a GitHub Actio
    - `MANIAPLANET_LOGIN` – your ManiaPlanet login
    - `MANIAPLANET_PASSWORD` – your password
 
+   Quick tip (GitHub CLI):
+
+   If you prefer the command line, install and login with `gh` and run:
+
+   ```powershell
+   $repo = 'tomekdot/pursuit-channel-agent'
+   gh secret set MANIAPLANET_LOGIN --body 'your-login' --repo $repo
+   gh secret set MANIAPLANET_PASSWORD --body 'your-password' --repo $repo
+   ```
+
+   Note: the workflow is intentionally written to skip the agent run when the
+   two secrets are missing (the dry-run step still runs). This prevents the
+   job from failing with an error when credentials are not configured.
+
 3. (Optional) Add repository variables or override via Actions/environment:
    - `TARGET_URL` (default: `https://www.maniaplanet.com/programs/manager/106/episodes/106/playlist`)
    - `LOGIN_URL` (default: `https://www.maniaplanet.com/login`)

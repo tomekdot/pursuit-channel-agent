@@ -51,14 +51,21 @@ jobs:
           DRY_RUN=1 python -u agent.py
 
       - name: Run agent (debug)
-        # Set secrets/vars inside the run script to reduce editor diagnostics
+        # Only attempt to run the agent if credentials are configured; in
+        # scheduled or non-interactive environments we want the workflow to
+        # gracefully skip rather than erroring out with missing secrets.
         run: |
+          set -euo pipefail
+          if [ -z "${{ secrets.MANIAPLANET_LOGIN }}" ] || [ -z "${{ secrets.MANIAPLANET_PASSWORD }}" ]; then
+            echo "MANIAPLANET login/password secrets not set; skipping agent run."
+            exit 0
+          fi
           # Export required environment values into the runner environment
           echo "LOGIN=${{ secrets.MANIAPLANET_LOGIN }}" >> $GITHUB_ENV
           echo "PASSWORD=${{ secrets.MANIAPLANET_PASSWORD }}" >> $GITHUB_ENV
-          echo "TARGET_URL=${{ vars.TARGET_URL }}" >> $GITHUB_ENV
-          echo "LOGIN_URL=${{ vars.LOGIN_URL }}" >> $GITHUB_ENV
-          echo "PLAYLIST_IDS=${{ vars.PLAYLIST_IDS }}" >> $GITHUB_ENV
+          echo "TARGET_URL=${{ vars.TARGET_URL }}" >> $GITHUB_ENV || true
+          echo "LOGIN_URL=${{ vars.LOGIN_URL }}" >> $GITHUB_ENV || true
+          echo "PLAYLIST_IDS=${{ vars.PLAYLIST_IDS }}" >> $GITHUB_ENV || true
           echo "WAIT_TIMEOUT=60" >> $GITHUB_ENV
           echo "PYTHONUNBUFFERED=1" >> $GITHUB_ENV
           python -u agent.py 2>&1 | tee agent.log

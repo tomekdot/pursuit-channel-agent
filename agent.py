@@ -409,6 +409,7 @@ def sanitize_html(html: str) -> str:
 
         # Redact JWT-like tokens (three dot separated base64-ish parts)
         html = re.sub(r"\b[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b", "[REDACTED]", html)
+        
         # Redact common JS fetch() calls that include Authorization headers
         html = re.sub(r"fetch\s*\([^)]*(Authorization|Bearer|token)[^)]*\)", "[REDACTED]", html, flags=re.I)
 

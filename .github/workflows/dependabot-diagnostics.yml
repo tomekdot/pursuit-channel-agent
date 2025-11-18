@@ -1,0 +1,80 @@
+name: Dependabot diagnostics
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  diagnostics:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup simple tools
+        run: |
+          set -euxo pipefail
+          # Ensure python and docker are available
+          python --version || true
+          docker --version || true
+          if ! gh --version >/dev/null 2>&1; then
+            echo "Installing GitHub CLI (gh)..."
+            sudo apt update -y
+            sudo apt install -y gh
+          fi
+          gh --version
+
+      - name: Check GITHUB_REGISTRIES_PROXY
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euxo pipefail
+          echo "Fetching repository variable GITHUB_REGISTRIES_PROXY (if present)..."
+          proxy_val=$(gh variable get GITHUB_REGISTRIES_PROXY --repo ${{ github.repository }} || echo "")
+          if [ -z "$proxy_val" ]; then
+            echo "GITHUB_REGISTRIES_PROXY not set. Nothing to validate."
+            exit 0
+          fi
+          echo "GITHUB_REGISTRIES_PROXY found (length: ${#proxy_val})"
+          # Try to parse JSON; allow either JSON or simple host:port; validate with python
+          python - <<'PY'
+          import json,sys
+          v = sys.stdin.read().strip()
+          if not v:
+              print('empty')
+              sys.exit(0)
+          try:
+              parsed = json.loads(v)
+              print('Parsed as JSON, keys:', list(parsed.keys())[:10])
+          except Exception as e:
+              # If not JSON, ensure it's a host/socket style like http://host:port
+              if '://' in v or ':' in v:
+                  print('Non-JSON proxy string appears valid (contains scheme or host:port)')
+              else:
+                  print('Proxy format might be invalid:', v)
+                  sys.exit(2)
+          PY
+          # Show the first 200 chars sanitized
+          echo "Sanitized preview: ${proxy_val:0:200}"
+
+      - name: Attempt to pull Dependabot updater image
+        run: |
+          set -euxo pipefail
+          echo "Trying Docker pull: ghcr.io/dependabot/dependabot-updater-pip:latest"
+          docker pull ghcr.io/dependabot/dependabot-updater-pip:latest || true
+          echo "If the pull fails with 404 or network error, the GHCR image isn't reachable from this runner or the tag is not present."
+
+      - name: Check GHCR HTTPS manifest
+        run: |
+          set -euxo pipefail
+          echo "Checking GHCR manifest via curl (anonymous)..."
+          curl -I https://ghcr.io/v2/dependabot/dependabot-updater-pip/manifests/latest || true
+
+      - name: Summary / Next steps
+        run: |
+          echo "Diagnostics complete. Recommended next steps:"
+          echo "- If Docker pull fails: check GHCR connectivity or proxy settings and ensure ghcr.io is allowed."
+          echo "- If the proxy var exists and parsing failed: validate the var format (should be JSON for Dependabot proxy configuration)."
+          echo "- If you need help validating a proxy value, paste the (sanitized) value in a private place and I can validate it."

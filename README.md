@@ -61,7 +61,7 @@ Notes:
 - Debug HTML is sanitized before saving; logs are redacted of configured secrets.
 
 ## ⚙️ Configuration
-- `PLAYLIST_IDS` — comma-separated playlist ids (order used by lunar mapping). Example: `3045,3029`.
+- `PLAYLIST_IDS` — comma-separated playlist ids (order used by lunar mapping). Example: `3029, 3045`.
 - `TARGET_URL` — playlist management page (default in repo). Change if your manager uses a different URL.
 - `LOGIN_URL` — login page URL.
 - `WAIT_TIMEOUT` — seconds to wait for elements (defaults in workflow to 60).

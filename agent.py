@@ -665,7 +665,18 @@ def main():
     except Exception:
         pass
     if not DRY_RUN and (not LOGIN or not PASSWORD):
-        raise RuntimeError("LOGIN/PASSWORD missing from environment variables.")
+        # Fail fast but produce a clean, actionable message rather than
+        # an uncaught exception stack trace. CI/automation should exit
+        # non-zero but logs should explain how to fix the problem.
+        logger.error(
+            "LOGIN/PASSWORD missing from environment variables. "
+            "Set repository secrets `MANIAPLANET_LOGIN` and `MANIAPLANET_PASSWORD` "
+            "or export `LOGIN` and `PASSWORD` in the environment. "
+            "For local testing you can set `DRY_RUN=1` to skip Selenium actions."
+        )
+        import sys
+
+        sys.exit(1)
 
     # Determine the date to use (either from TEST_DATE or current UTC time)
     if TEST_DATE:

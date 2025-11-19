@@ -34,7 +34,7 @@ This repository contains a small, self-contained Python agent and a GitHub Actio
 3. (Optional) Add repository variables or override via Actions/environment:
    - `TARGET_URL` (default: `https://www.maniaplanet.com/programs/manager/106/episodes/106/playlist`)
    - `LOGIN_URL` (default: `https://www.maniaplanet.com/login`)
-   - `PLAYLIST_IDS` (comma-separated, e.g. `3045,3029`)
+   - `PLAYLIST_IDS` (comma-separated, e.g. `3045, 3029`)
    - `SPECIAL_PLAYLIST` / `DEFAULT_PLAYLIST` (alternate override values)
 
 4. Use the workflow `Run workflow` in Actions to test, or wait for the scheduled run (default: 08:00 UTC daily).
@@ -75,7 +75,7 @@ Notes:
 - Debug HTML is sanitized before saving; logs are redacted of configured secrets.
 
 ## ⚙️ Configuration
-- `PLAYLIST_IDS` — comma-separated playlist ids (order used by lunar mapping). Example: `3029, 3045`.
+- `PLAYLIST_IDS` — comma-separated playlist ids (order used by lunar mapping). Example: `3045, 3029`.
 - `TARGET_URL` — playlist management page (default in repo). Change if your manager uses a different URL.
 - `LOGIN_URL` — login page URL.
 - `WAIT_TIMEOUT` — seconds to wait for elements (defaults in workflow to 60).

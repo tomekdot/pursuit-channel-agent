@@ -559,6 +559,7 @@ def change_playlist(driver, playlist_id: str):
     """
     from selenium.webdriver.common.by import By
     from selenium.webdriver.support.ui import WebDriverWait
+    from selenium.webdriver.support import expected_conditions as EC
     from selenium.webdriver.support.ui import Select
 
     wait = WebDriverWait(driver, WAIT_TIMEOUT)
@@ -660,10 +661,56 @@ def change_playlist(driver, playlist_id: str):
                 continue
 
         if not target_select:
-            raise RuntimeError(
-                f"<select> with option value={playlist_id} not found. Update selectors. "
-                f"Detected {len(selects_info)} select(s). See debug artifact 'no_select' (saved HTML + screenshot)."
-            )
+            # Attempt to scan all iframes for the <select> if none found in the main document.
+            try:
+                iframes = driver.find_elements(By.TAG_NAME, "iframe")
+            except Exception:
+                iframes = []
+
+            if iframes:
+                _log(logging.DEBUG, f"No matching <select> in main document; scanning {len(iframes)} iframe(s)")
+
+            for idx, fr in enumerate(iframes):
+                try:
+                    fr_id = fr.get_attribute("id") or fr.get_attribute("name") or "<no-id>"
+                    fr_src = fr.get_attribute("src") or ""
+                    _log(logging.DEBUG, f"Scanning iframe #{idx} id={fr_id} src={fr_src}")
+                    driver.switch_to.frame(fr)
+                    inner_selects = driver.find_elements(By.TAG_NAME, "select")
+                    for s in inner_selects:
+                        try:
+                            if s.get_attribute("disabled"):
+                                continue
+                            if s.find_elements(By.CSS_SELECTOR, f"option[value='{playlist_id}']"):
+                                target_select = s
+                                break
+                            for o in s.find_elements(By.TAG_NAME, "option"):
+                                try:
+                                    if playlist_id in (o.get_attribute("value") or "") or playlist_id in (o.text or ""):
+                                        target_select = s
+                                        break
+                                except Exception:
+                                    continue
+                            if target_select:
+                                break
+                        except Exception:
+                            continue
+                    driver.switch_to.default_content()
+                    if target_select:
+                        _log(logging.DEBUG, f"Found matching <select> inside iframe id={fr_id} src={fr_src}")
+                        break
+                except Exception:
+                    try:
+                        driver.switch_to.default_content()
+                    except Exception:
+                        pass
+                    continue
+
+            if not target_select:
+                raise RuntimeError(
+                    f"<select> with option value={playlist_id} not found. Update selectors. "
+                    f"Detected {len(selects_info)} select(s). See debug artifact 'no_select' (saved HTML + screenshot)."
+                )
 
     # --- Change the Playlist Selection ---
     # Determine which option value to select. Prefer exact value match, otherwise

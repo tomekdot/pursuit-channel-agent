@@ -34,9 +34,7 @@ This repository contains a small, self-contained Python agent and a GitHub Actio
 3. (Optional) Add repository variables or override via Actions/environment:
    - `TARGET_URL` (default: `https://www.maniaplanet.com/programs/manager/106/episodes/106/playlist`)
    - `LOGIN_URL` (default: `https://www.maniaplanet.com/login`)
-   - `PLAYLIST_IDS` (comma-separated, e.g. `3029, 3045`)
-      - `PLAYLIST_SELECT_SELECTOR` (optional) — a CSS selector to directly target the `<select>` element if the default detection fails. Example: `#playlist_0_playlist` or `select[name='playlist_0[playlist]']`.
-         - `PLAYLIST_IFRAME_SELECTOR` (optional) — if the playlist UI is embedded inside an iframe, set a CSS selector for the iframe to switch context before searching for the `<select>`.
+   - `PLAYLIST_IDS` (comma-separated, e.g. `3045,3029`)
    - `SPECIAL_PLAYLIST` / `DEFAULT_PLAYLIST` (alternate override values)
 
 4. Use the workflow `Run workflow` in Actions to test, or wait for the scheduled run (default: 08:00 UTC daily).
@@ -96,6 +94,12 @@ If the site requires extra confirmation steps or introduces CAPTCHA, the run wil
 - 🔍 After a workflow run, check `Actions` → job logs. The action uploads `agent.log` and debug files (`*.html`, `*.png`) when available.
 - 🗂️ Local debug: the agent can save `login_page.html`, `target_page.html`, `after_change.html` and screenshots in the working directory when issues occur.
  - 🧭 When you see `"<select> with option value=... not found"` errors, check the `target_page.html` saved by the workflow; search for `<select` elements and confirm the `id`, `name` and `<option>` `value`s. If the UI has changed (different attribute names or option values), update `agent.py` `change_playlist` selectors accordingly, or open an issue so the script can be updated.
+ - 🔎 Additional troubleshooting steps:
+    1. Open the `target_page.html` artifact in a browser and search for `<select` and `<option>` tags.
+    2. Confirm you are on the expected page (check the visible UI and page title). If the page shows a login or error page, the login probably failed or a redirect changed; check `login_page.html` and the job logs.
+    3. If no `<select>` exists but the playlist UI exists elsewhere on the page (e.g., inside an iframe), use `PLAYLIST_IFRAME_SELECTOR` to switch into the iframe.
+    4. If the `<select>` exists but its `value` attributes are different (e.g., `value="PL-3029"`), either update `PLAYLIST_IDS` or set an override `PLAYLIST_SELECT_SELECTOR` so the script picks the right select and fallback matches by text/contains.
+    5. As a fast workaround, add a repo variable (`PLAYLIST_SELECT_SELECTOR`) and set it to the selector matching the `<select>`. For frames, set `PLAYLIST_IFRAME_SELECTOR` too.
 
 ## 🤝 Contributing
 - 🐞 Open issues for selector updates, schedule changes, or feature requests.

@@ -564,6 +564,11 @@ def change_playlist(driver, playlist_id: str):
     wait = WebDriverWait(driver, WAIT_TIMEOUT)
     driver.get(TARGET_URL)
     save_debug(driver, "target_page")
+    # Log the final URL and page title to help diagnose redirects or content differences
+    try:
+        _log(logging.DEBUG, f"Loaded TARGET_URL -> {driver.current_url} (title={driver.title})")
+    except Exception:
+        _log(logging.DEBUG, "Loaded TARGET_URL; could not read current_url/title")
 
     # Optional: if the playlist selector lives inside an iframe, you can set
     # PLAYLIST_IFRAME_SELECTOR to a CSS selector to switch into that iframe.

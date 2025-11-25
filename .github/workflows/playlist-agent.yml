@@ -28,7 +28,7 @@ jobs:
         uses: actions/setup-python@v5
         with:
           # Use Python 3.14 per request
-          python-version: '3.12'
+          python-version: '3.14'
 
       - name: Install Chrome
         uses: browser-actions/setup-chrome@v1

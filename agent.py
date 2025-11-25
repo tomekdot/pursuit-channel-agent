@@ -576,7 +576,19 @@ def change_playlist(driver, playlist_id: str):
     _log(logging.INFO, f"Navigating to TARGET_URL: {TARGET_URL}")
     sys.stdout.flush()
     driver.get(TARGET_URL)
-    _log(logging.INFO, f"Current URL after navigation: {driver.current_url}")
+    
+    # Wait for page to load and log current state
+    time.sleep(2)  # Give page time to load/redirect
+    _log(logging.INFO, f"Current URL: {driver.current_url}")
+    _log(logging.INFO, f"Page title: {driver.title}")
+    sys.stdout.flush()
+    
+    # Check if we got redirected to login page
+    if "login" in driver.current_url.lower():
+        _log(logging.ERROR, "Session lost - redirected to login page. Check login flow.")
+        save_debug(driver, "session_lost")
+        raise RuntimeError("Session lost after login - redirected back to login page")
+    
     save_debug(driver, "target_page")
 
     # --- Find the Playlist <select> Element ---

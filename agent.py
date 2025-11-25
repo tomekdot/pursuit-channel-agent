@@ -566,6 +566,7 @@ def change_playlist(driver, playlist_id: str):
     from selenium.webdriver.common.by import By
     from selenium.webdriver.support.ui import WebDriverWait
     from selenium.webdriver.support.ui import Select
+    from selenium.webdriver.support import expected_conditions as EC
 
     wait = WebDriverWait(driver, WAIT_TIMEOUT)
     driver.get(TARGET_URL)

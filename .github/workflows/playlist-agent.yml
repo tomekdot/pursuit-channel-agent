@@ -63,7 +63,7 @@ jobs:
             echo "MANIAPLANET secrets configured; the agent step will run.";
           fi
 
-      - name: Run agent (debug)
+      - name: Run agent
         # Only attempt to run the agent if credentials are configured; in
         # scheduled or non-interactive environments we want the workflow to
         # gracefully skip rather than erroring out with missing secrets.
@@ -75,7 +75,7 @@ jobs:
           PLAYLIST_IDS: ${{ vars.PLAYLIST_IDS }}
           WAIT_TIMEOUT: '60'
           PYTHONUNBUFFERED: '1'
-          LOG_LEVEL: 'DEBUG'
+          LOG_LEVEL: 'INFO'
         run: |
           set -euo pipefail
           if [ -z "$LOGIN" ] || [ -z "$PASSWORD" ]; then

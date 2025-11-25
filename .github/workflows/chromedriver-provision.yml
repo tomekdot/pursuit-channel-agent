@@ -9,7 +9,9 @@ permissions:
 jobs:
   provision:
     runs-on: ubuntu-latest
-    # Removed env vars to avoid editor warnings; vars are read in the script
+    env:
+      CHROMEDRIVER_URL: ${{ vars.CHROMEDRIVER_URL }}
+      CHROMEDRIVER_SHA256: ${{ vars.CHROMEDRIVER_SHA256 }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -22,13 +24,9 @@ jobs:
           sudo apt-get install -y unzip file
 
       - name: Download & verify Chromedriver
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          CHROMEDRIVER_URL=$(gh variable get CHROMEDRIVER_URL --repo ${{ github.repository }} || echo "")
-          CHROMEDRIVER_SHA256=$(gh variable get CHROMEDRIVER_SHA256 --repo ${{ github.repository }} || echo "")
-          if [ -z "$CHROMEDRIVER_URL" ]; then
+          if [ -z "${CHROMEDRIVER_URL:-}" ]; then
             echo "CHROMEDRIVER_URL not configured. Set repository variable 'CHROMEDRIVER_URL' and re-run." >&2
             exit 1
           fi

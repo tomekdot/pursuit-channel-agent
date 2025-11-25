@@ -64,11 +64,11 @@ TARGET_URL = os.getenv(
 )
 
 # Comma-separated playlist IDs from environment, converted to a list.
-# Accept values like "3029" or "PL-3029" and normalize by removing a
-# leading "PL-" prefix so PLAYLIST_IDS matches the option `value` on the page.
+# Each playlist ID from PLAYLIST_IDS should exactly match the `value`
+# attribute of an <option> on the page.
 PLAYLIST_IDS_ENV = os.getenv("PLAYLIST_IDS", "3045, 3029")
 PLAYLIST_IDS: List[str] = [
-    re.sub(r"^pl-", "", x.strip(), flags=re.I)
+    x.strip()
     for x in PLAYLIST_IDS_ENV.split(",")
     if x.strip()
 ]

@@ -63,9 +63,15 @@ TARGET_URL = os.getenv(
     "https://www.maniaplanet.com/programs/manager/106/episodes/106/playlist",
 )
 
-# Comma-separated playlist IDs from environment, converted to a list
+# Comma-separated playlist IDs from environment, converted to a list.
+# Accept values like "3029" or "PL-3029" and normalize by removing a
+# leading "PL-" prefix so PLAYLIST_IDS matches the option `value` on the page.
 PLAYLIST_IDS_ENV = os.getenv("PLAYLIST_IDS", "3045, 3029")
-PLAYLIST_IDS: List[str] = [x.strip() for x in PLAYLIST_IDS_ENV.split(",") if x.strip()]
+PLAYLIST_IDS: List[str] = [
+    re.sub(r"^pl-", "", x.strip(), flags=re.I)
+    for x in PLAYLIST_IDS_ENV.split(",")
+    if x.strip()
+]
 
 # --- Optional Settings ---
 

@@ -569,23 +569,31 @@ def change_playlist(driver, playlist_id: str):
     from selenium.webdriver.support import expected_conditions as EC
 
     wait = WebDriverWait(driver, WAIT_TIMEOUT)
+    _log(logging.DEBUG, f"Navigating to TARGET_URL: {TARGET_URL}")
     driver.get(TARGET_URL)
+    _log(logging.DEBUG, f"Current URL after navigation: {driver.current_url}")
     save_debug(driver, "target_page")
 
     # --- Find the Playlist <select> Element ---
     target_select = None
     # Try specific ID and name selectors first
+    _log(logging.DEBUG, "Looking for select#playlist_0_playlist...")
     try:
         target_select = wait.until(EC.presence_of_element_located((By.ID, "playlist_0_playlist")))
-    except Exception:
+        _log(logging.DEBUG, "Found select by ID")
+    except Exception as e:
+        _log(logging.DEBUG, f"Select by ID not found: {e}")
         try:
             target_select = wait.until(EC.presence_of_element_located((By.NAME, "playlist_0[playlist]")))
-        except Exception:
-            pass
+            _log(logging.DEBUG, "Found select by NAME")
+        except Exception as e2:
+            _log(logging.DEBUG, f"Select by NAME not found: {e2}")
 
     # Fallback: scan all <select> elements on the page
     if not target_select:
+        _log(logging.DEBUG, "Scanning all <select> elements...")
         selects = driver.find_elements(By.TAG_NAME, "select")
+        _log(logging.DEBUG, f"Found {len(selects)} select elements")
         for s in selects:
             try:
                 if s.get_attribute("disabled"):
@@ -593,6 +601,7 @@ def change_playlist(driver, playlist_id: str):
                 # Check if the select element contains the desired playlist ID as an option
                 if s.find_elements(By.CSS_SELECTOR, f"option[value='{playlist_id}']"):
                     target_select = s
+                    _log(logging.DEBUG, f"Found select with option value={playlist_id}")
                     break
             except Exception:
                 continue
@@ -602,17 +611,22 @@ def change_playlist(driver, playlist_id: str):
         raise RuntimeError(f"<select> with option value={playlist_id} not found. Update selectors.")
 
     # --- Change the Playlist Selection ---
+    _log(logging.DEBUG, f"Selecting value: {playlist_id}")
     try:
         Select(target_select).select_by_value(playlist_id)
-    except Exception:
+        _log(logging.DEBUG, "Selection successful via Select helper")
+    except Exception as e:
+        _log(logging.DEBUG, f"Select helper failed: {e}, trying JavaScript...")
         # If the standard Select helper fails, try using JavaScript
         try:
             driver.execute_script("arguments[0].value = arguments[1]; arguments[0].dispatchEvent(new Event('change'));", target_select, playlist_id)
-        except Exception:
+            _log(logging.DEBUG, "Selection successful via JavaScript")
+        except Exception as e2:
             save_debug(driver, "select_set_fail")
             raise
 
     # --- Find and Click the Save Button ---
+    _log(logging.DEBUG, "Looking for save button...")
     save_clicked = False
     # Try specific selectors first
     try:
@@ -620,6 +634,7 @@ def change_playlist(driver, playlist_id: str):
         if btn.is_enabled():
             btn.click()
             save_clicked = True
+            _log(logging.DEBUG, "Clicked button by ID playlist_0_submit")
     except Exception:
         pass
 
@@ -629,6 +644,7 @@ def change_playlist(driver, playlist_id: str):
             if btn.is_enabled():
                 btn.click()
                 save_clicked = True
+                _log(logging.DEBUG, "Clicked button by NAME playlist_0[submit]")
         except Exception:
             pass
 
@@ -639,6 +655,7 @@ def change_playlist(driver, playlist_id: str):
             if btn.is_enabled():
                 btn.click()
                 save_clicked = True
+                _log(logging.DEBUG, "Clicked generic submit button")
         except Exception:
             pass
 
@@ -652,11 +669,17 @@ def change_playlist(driver, playlist_id: str):
                     if b.is_displayed() and b.is_enabled():
                         b.click()
                         save_clicked = True
+                        _log(logging.DEBUG, f"Clicked button with text: {text}")
                         break
                 if save_clicked:
                     break
             except Exception:
                 continue
+
+    if not save_clicked:
+        _log(logging.WARNING, "No save button was clicked!")
+    else:
+        _log(logging.INFO, "Playlist change submitted")
 
     # Give the site a moment to process the change
     time.sleep(3)

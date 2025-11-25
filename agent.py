@@ -563,24 +563,29 @@ def change_playlist(driver, playlist_id: str):
         driver: The Selenium WebDriver instance.
         playlist_id: The ID of the playlist to select.
     """
+    import sys
     from selenium.webdriver.common.by import By
     from selenium.webdriver.support.ui import WebDriverWait
     from selenium.webdriver.support.ui import Select
     from selenium.webdriver.support import expected_conditions as EC
 
+    _log(logging.INFO, f"change_playlist called with playlist_id={playlist_id}")
+    sys.stdout.flush()
+    
     wait = WebDriverWait(driver, WAIT_TIMEOUT)
-    _log(logging.DEBUG, f"Navigating to TARGET_URL: {TARGET_URL}")
+    _log(logging.INFO, f"Navigating to TARGET_URL: {TARGET_URL}")
+    sys.stdout.flush()
     driver.get(TARGET_URL)
-    _log(logging.DEBUG, f"Current URL after navigation: {driver.current_url}")
+    _log(logging.INFO, f"Current URL after navigation: {driver.current_url}")
     save_debug(driver, "target_page")
 
     # --- Find the Playlist <select> Element ---
     target_select = None
     # Try specific ID and name selectors first
-    _log(logging.DEBUG, "Looking for select#playlist_0_playlist...")
+    _log(logging.INFO, "Looking for select#playlist_0_playlist...")
     try:
         target_select = wait.until(EC.presence_of_element_located((By.ID, "playlist_0_playlist")))
-        _log(logging.DEBUG, "Found select by ID")
+        _log(logging.INFO, "Found select by ID")
     except Exception as e:
         _log(logging.DEBUG, f"Select by ID not found: {e}")
         try:
@@ -611,10 +616,10 @@ def change_playlist(driver, playlist_id: str):
         raise RuntimeError(f"<select> with option value={playlist_id} not found. Update selectors.")
 
     # --- Change the Playlist Selection ---
-    _log(logging.DEBUG, f"Selecting value: {playlist_id}")
+    _log(logging.INFO, f"Selecting value: {playlist_id}")
     try:
         Select(target_select).select_by_value(playlist_id)
-        _log(logging.DEBUG, "Selection successful via Select helper")
+        _log(logging.INFO, "Selection successful via Select helper")
     except Exception as e:
         _log(logging.DEBUG, f"Select helper failed: {e}, trying JavaScript...")
         # If the standard Select helper fails, try using JavaScript
@@ -626,7 +631,7 @@ def change_playlist(driver, playlist_id: str):
             raise
 
     # --- Find and Click the Save Button ---
-    _log(logging.DEBUG, "Looking for save button...")
+    _log(logging.INFO, "Looking for save button...")
     save_clicked = False
     # Try specific selectors first
     try:
@@ -634,7 +639,7 @@ def change_playlist(driver, playlist_id: str):
         if btn.is_enabled():
             btn.click()
             save_clicked = True
-            _log(logging.DEBUG, "Clicked button by ID playlist_0_submit")
+            _log(logging.INFO, "Clicked button by ID playlist_0_submit")
     except Exception:
         pass
 

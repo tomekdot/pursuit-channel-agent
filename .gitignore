@@ -25,3 +25,6 @@ pip-delete-this-directory.txt
 
 # mypy
 .mypy_cache/
+
+# Skyfield ephemeris data (auto-downloaded)
+de421.bsp

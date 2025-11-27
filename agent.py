@@ -242,11 +242,58 @@ def lunar_day(today_utc: Optional[dt.datetime] = None) -> int:
         return today_utc.day % 30
 
 
+def _get_moon_phase_dates_for_month(year: int, month: int) -> List[Tuple[int, str]]:
+    """
+    Get exact moon phase dates for a given month using the skyfield library.
+    
+    Args:
+        year: The year (e.g., 2025)
+        month: The month (1-12)
+    
+    Returns:
+        List of (day, phase_name) tuples for phases occurring in that month.
+        phase_name is one of: 'new', 'first_quarter', 'full', 'third_quarter'
+    """
+    from skyfield import api, almanac
+    
+    results = []
+    
+    # Load ephemeris data (cached after first download)
+    eph = api.load('de421.bsp')
+    ts = api.load.timescale()
+    
+    # Define time range for the month
+    if month == 12:
+        t0 = ts.utc(year, month, 1)
+        t1 = ts.utc(year + 1, 1, 1)
+    else:
+        t0 = ts.utc(year, month, 1)
+        t1 = ts.utc(year, month + 1, 1)
+    
+    # Find moon phases in this range
+    # almanac.moon_phases returns: 0=New, 1=First Quarter, 2=Full, 3=Third Quarter
+    times, phases = almanac.find_discrete(t0, t1, almanac.moon_phases(eph))
+    
+    phase_names = {
+        0: 'new',
+        1: 'first_quarter',
+        2: 'full',
+        3: 'third_quarter'
+    }
+    
+    for time, phase in zip(times, phases):
+        py_dt = time.utc_datetime()
+        results.append((py_dt.day, phase_names[phase]))
+    
+    return sorted(results, key=lambda x: x[0])
+
+
 def _is_phase_date(date_dt: dt.datetime) -> bool:
     """
     Checks if a given UTC date corresponds to a major moon phase.
 
-    This function checks for new moon, full moon, first quarter, and last quarter.
+    This function checks for new moon, full moon, first quarter, and third quarter
+    using the skyfield library for precise astronomical calculations.
 
     Args:
         date_dt: The UTC datetime to check.
@@ -254,18 +301,11 @@ def _is_phase_date(date_dt: dt.datetime) -> bool:
     Returns:
         True if the date is a major moon phase, False otherwise.
     """
-    # Use astral.moon.phase to get moon age (days). We'll treat dates close
-    # to canonical phase ages (new=0, first~7, full~14, last~21) as phase dates.
     try:
-        phase = astral_moon.phase(date_dt)
-        # Round to nearest integer day
-        rounded = int(round(phase)) % 30
-        # canonical major phases
-        major = {0, 7, 14, 21}
-        # Tolerance (days) around the canonical value
-        tol = 0.8
-        if rounded in major and abs(phase - rounded) <= tol:
-            return True
+        phases = _get_moon_phase_dates_for_month(date_dt.year, date_dt.month)
+        for day, _ in phases:
+            if day == date_dt.day:
+                return True
     except Exception:
         pass
     return False
@@ -563,25 +603,20 @@ def change_playlist(driver, playlist_id: str):
         driver: The Selenium WebDriver instance.
         playlist_id: The ID of the playlist to select.
     """
-    import sys
     from selenium.webdriver.common.by import By
-    from selenium.webdriver.support.ui import WebDriverWait
-    from selenium.webdriver.support.ui import Select
+    from selenium.webdriver.support.ui import WebDriverWait, Select
     from selenium.webdriver.support import expected_conditions as EC
 
     _log(logging.INFO, f"change_playlist called with playlist_id={playlist_id}")
-    sys.stdout.flush()
     
     wait = WebDriverWait(driver, WAIT_TIMEOUT)
     _log(logging.INFO, f"Navigating to TARGET_URL: {TARGET_URL}")
-    sys.stdout.flush()
     driver.get(TARGET_URL)
     
-    # Wait for page to load and log current state
-    time.sleep(2)  # Give page time to load/redirect
+    # Wait for page to load
+    time.sleep(2)
     _log(logging.INFO, f"Current URL: {driver.current_url}")
     _log(logging.INFO, f"Page title: {driver.title}")
-    sys.stdout.flush()
     
     # Check if we got redirected to login page
     if "login" in driver.current_url.lower():

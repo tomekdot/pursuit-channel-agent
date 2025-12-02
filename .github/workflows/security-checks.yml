@@ -17,6 +17,11 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Setup Git
+        uses: actions/setup-git@v1
+        with:
+          version: latest
+
       - name: Setup Python
         uses: actions/setup-python@v5
         with:

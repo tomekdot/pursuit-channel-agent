@@ -403,12 +403,12 @@ def save_debug(driver, name: str):
         return
     try:
         html = driver.page_source
-        # sanitize page HTML to avoid leaking credentials or tokens
+        # Sanitize page HTML to avoid leaking credentials or tokens
         try:
             safe_html = sanitize_html(html)
         except Exception:
             safe_html = html
-        # redact any literal occurrences of credentials from environment
+        # Redact any literal occurrences of credentials from environment
         try:
             redacted_login = (LOGIN or "")
             redacted_password = (PASSWORD or "")
@@ -439,7 +439,7 @@ def sanitize_html(html: str) -> str:
     in scripts and attributes.
     """
     try:
-        # remove value="..." or value='...' for input tags (simple removal)
+        # Remove value="..." or value='...' for input tags (simple removal)
         html = re.sub(r"(<input\b[^>]*?)\svalue=(\".*?\"|'.*?'|[^>\s>]+)", r"\1", html, flags=re.I|re.S)
 
         # Remove common meta tags that may contain CSRF tokens

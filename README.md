@@ -73,9 +73,9 @@ Credentials stored in GitHub Secrets only. Logs are automatically redacted.
 
 ## 👤 Contact
 
-- **Author:** tomekdot
-- **Team:** vitalism-creative
-- **Discord:** @tomekdot
+- **Author:** `tomekdot`
+- **Team:** `vitalism-creative`
+- **Discord:** `@tomekdot`
 
 ## 📝 License
 

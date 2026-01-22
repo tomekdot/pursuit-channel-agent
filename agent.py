@@ -29,26 +29,20 @@ __version__ = "1.0.0"
 __author__ = "tomekdot"
 __description__ = "Automated ManiaPlanet playlist updater based on lunar phases."
 
+import logging
+import math
 import os
 import re
-import math
+import sys
 import time
-import logging
+from typing import List, Optional, Tuple
+
 import datetime as dt
 from astral import moon as astral_moon
-from typing import List, Optional, Tuple
-from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    # Type-only imports for linters/typecheckers (not imported at runtime)
-    from selenium import webdriver  # pragma: no cover
-    from selenium.webdriver.common.by import By  # pragma: no cover
-    from selenium.webdriver.support.ui import WebDriverWait  # pragma: no cover
-    from selenium.webdriver.support import expected_conditions as EC  # pragma: no cover
-    from selenium.webdriver.support.ui import Select  # pragma: no cover
-    from selenium.webdriver.chrome.options import Options  # pragma: no cover
-    from selenium.webdriver.chrome.service import Service as ChromeService  # pragma: no cover
-
+# Lazy imports (imported at runtime only when needed)
+# - selenium modules are imported in build_driver() and other functions
+# - skyfield modules are imported in _get_moon_phase_dates_for_month()
 
 # --- Configuration from Environment Variables ---
 
@@ -64,11 +58,9 @@ TARGET_URL = os.getenv(
 )
 
 # Comma-separated playlist IDs from environment, converted to a list.
-# Accept values like "3029" or "PL-3029" and normalize by removing
-# any leading "PL-" prefix so PLAYLIST_IDS matches the option `value` on the page.
 PLAYLIST_IDS_ENV = os.getenv("PLAYLIST_IDS", "3045, 3029")
 PLAYLIST_IDS: List[str] = [
-    re.sub(r"^PL-", "", x.strip(), flags=re.I)
+    x.strip()
     for x in PLAYLIST_IDS_ENV.split(",")
     if x.strip()
 ]
@@ -756,8 +748,6 @@ def main():
             "or export `LOGIN` and `PASSWORD` in the environment. "
             "For local testing you can set `DRY_RUN=1` to skip Selenium actions."
         )
-        import sys
-
         sys.exit(1)
 
     # Determine the date to use (either from TEST_DATE or current UTC time)

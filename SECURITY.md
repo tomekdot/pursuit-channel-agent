@@ -26,10 +26,8 @@ Preferred reporting options (in order):
    choose "Create a security advisory". This keeps the report private and
    allows coordinated disclosure.
 
-2. Email (PGP): send an encrypted message to `security@EXAMPLE.COM` with
-   details and reproduction steps. **Replace `security@EXAMPLE.COM` with
-   a real contact address before publishing this file.** If you use
-   email, please include:
+2. Email (PGP): send an encrypted message to `tomaszkaczak@pm.me` with
+   details and reproduction steps. If you use email, please include:
    - Affected version(s) and environment details
    - Minimal reproduction steps or a proof-of-concept
    - Expected and actual behaviour

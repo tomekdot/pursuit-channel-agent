@@ -1,77 +1,52 @@
 # Security Policy
 
+## Scope
+
+This policy applies to **ManiaPlanet Playlist Agent** and its production use in GitHub Actions.
+
 ## Supported Versions
 
-Use this section to tell people about which versions of your project are
-currently being supported with security updates.
+Security fixes are provided for:
 
-| Version | Supported          |
-| ------- | ------------------ |
-| 1.0.x   | :white_check_mark: |
-| < 1.0   | :x:                |
+| Version | Supported |
+| ------- | --------- |
+| 1.x     | Yes       |
+| < 1.0   | No        |
 
-> Note: this repository is currently released as `v1.0.0`. Adjust the
-> supported-versions table above if you publish newer releases.
+## Production Security Baseline
+
+For production deployments:
+
+1. Store credentials only in GitHub Actions Secrets (`MANIAPLANET_LOGIN`, `MANIAPLANET_PASSWORD`).
+2. Do not hardcode credentials in code, workflow files, logs, or pull requests.
+3. Keep workflow permissions minimal (`contents: read` unless more is required).
+4. Keep dependencies updated and pin versions when possible.
+5. Redact sensitive values in logs (enabled by default in this project).
+6. Restrict repository admin access and require 2FA for maintainers.
 
 ## Reporting a Vulnerability
 
-If you believe you've found a security vulnerability in this project,
-please do NOT open a public GitHub issue. Instead follow one of these
-private reporting channels so we can triage the report safely.
+Please do **not** open a public issue for security vulnerabilities.
 
-Preferred reporting options (in order):
+Use one of the private channels:
 
-1. GitHub Security Advisories — open a private security advisory on this
-   repository (recommended). Use the "Security" → "Advisories" tab and
-   choose "Create a security advisory". This keeps the report private and
-   allows coordinated disclosure.
+1. GitHub Security Advisories (preferred):
+   - Repository -> Security -> Advisories -> New draft security advisory
+2. Email: `tomaszkaczak@pm.me`
 
-2. Email (PGP): send an encrypted message to `tomaszkaczak@pm.me` with
-   details and reproduction steps. If you use email, please include:
-   - Affected version(s) and environment details
-   - Minimal reproduction steps or a proof-of-concept
-   - Expected and actual behaviour
-   - Any relevant logs or stack traces
+Include:
 
-3. If neither option above is available, create a private GitHub issue
-   and mark it as sensitive, then notify the maintainers via the
-   repository's maintainers contact method.
+- affected version/commit
+- reproduction steps or proof of concept
+- impact assessment
+- suggested mitigation (if available)
 
-Please do not post vulnerability details publicly (including social media
-or public GitHub issues) until a fix has been released or a coordinated
-disclosure timeline has been agreed.
+## Response Targets
 
-## What to expect
+- Acknowledgement: within 3 business days
+- Triage update: within 7 business days
+- Fix timeline: shared after triage based on severity
 
-- Acknowledgement within 3 business days.
-- Triage and next-steps (fix, mitigation, or request for more info) within
-  7 business days.
-- If a fix is required, we will make a best-effort plan and publish an
-  advisory, including a CVE request where applicable.
+## Coordinated Disclosure
 
-If we are unable to reach agreement on disclosure or a fix, we will
-explain the rationale and suggested mitigations.
-
-## Reporting PGP key (optional)
-
-If you prefer to encrypt sensitive details by PGP, include our PGP public
-key here. Replace the placeholder below with a real key before use:
-
-```
------BEGIN PGP PUBLIC KEY BLOCK-----
-<PGP KEY PLACEHOLDER>
------END PGP PUBLIC KEY BLOCK-----
-```
-
-## Timeline and coordinated disclosure
-
-We follow a coordinated disclosure process. After a fix is prepared we
-will coordinate a disclosure date that gives downstream users and package
-managers reasonable time to apply patches.
-
----
-
-If you'd like, I can update this file to include a real contact email or
-PGP key and translate any parts to English as well. Tell me the contact
-email you want published (or confirm you want to use GitHub Security
-Advisories only), and any other details to include.
+Please keep details private until a fix is released. We follow coordinated disclosure and publish advisories after remediation.

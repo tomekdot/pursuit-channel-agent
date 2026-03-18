@@ -14,7 +14,7 @@ jobs:
       CHROMEDRIVER_SHA256: ${{ vars.CHROMEDRIVER_SHA256 }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           persist-credentials: false
 
@@ -65,7 +65,7 @@ jobs:
           fi
 
       - name: Upload chromedriver artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: chromedriver
           path: chromedriver/

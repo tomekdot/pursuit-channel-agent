@@ -79,4 +79,4 @@ Credentials stored in GitHub Secrets only. Logs are automatically redacted.
 
 ## 📝 License
 
-MIT
+MIT License. See [LICENSE](LICENSE) for details.

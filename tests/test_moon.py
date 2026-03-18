@@ -28,6 +28,19 @@ def test_get_moon_phases_2025():
     assert 27 not in phase_days, "Nov 27 should NOT be a phase date"
 
 
+def test_get_moon_phases_january_2030():
+    """Test moon phase calculation for January 2030."""
+    phases = agent._get_moon_phase_dates_for_month(2030, 1)
+    phase_days = [day for day, _ in phases]
+    # January 2030: New Moon 4th, First Quarter 11th, Full Moon 19th, Third Quarter 26th
+    assert 4 in phase_days, "New Moon on Jan 4, 2030"
+    assert 11 in phase_days, "First Quarter on Jan 11, 2030"
+    assert 19 in phase_days, "Full Moon on Jan 19, 2030"
+    assert 26 in phase_days, "Third Quarter on Jan 26, 2030"
+    # 5th should NOT be a phase date
+    assert 5 not in phase_days, "Jan 5 should NOT be a phase date"
+
+
 def test_is_phase_date_exact_dates_2025():
     """Test that exact moon phase dates for 2025 are correctly detected."""
     # Known phase dates from skyfield astronomical calculations (UTC)

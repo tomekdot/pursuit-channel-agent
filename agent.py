@@ -106,7 +106,8 @@ if (os.getenv("CI") or os.getenv("GITHUB_ACTIONS")) and SAVE_DEBUG and not ALLOW
 
 
 class RedactingFilter(logging.Filter):
-    """Logging filter that redacts sensitive values from log messages and exception text.
+    """
+    Logging filter that redacts sensitive values from log messages and exception text.
 
     It replaces any literal occurrences of configured sensitive values with "[REDACTED]".
     This is best-effort: it runs on the LogRecord before formatting.
@@ -152,7 +153,8 @@ for h in logging.root.handlers:
 
 # Formatter that redacts secrets from formatted messages and exception text.
 class RedactingFormatter(logging.Formatter):
-    """Formatter that redacts configured sensitive values from output.
+    """
+    Formatter that redacts configured sensitive values from output.
 
     This overrides formatException to ensure tracebacks are also redacted.
     """
@@ -188,7 +190,8 @@ for h in logging.root.handlers:
 
 
 def _redact(message: str) -> str:
-    """Redacts sensitive values from a log message.
+    """
+    Redacts sensitive values from a log message.
 
     Args:
         message: The original log message.
@@ -202,7 +205,8 @@ def _redact(message: str) -> str:
 
 
 def _log(level: int, message: str):
-    """Logs a message at the specified level with redaction.
+    """
+    Logs a message at the specified level with redaction.
 
     Args:
         level: The logging level (e.g., logging.INFO).
@@ -424,7 +428,8 @@ def save_debug(driver, name: str):
 
 
 def sanitize_html(html: str) -> str:
-    """Return a sanitized copy of HTML with input values and common tokens removed.
+    """
+    Return a sanitized copy of HTML with input values and common tokens removed.
 
     This is defensive and best-effort. It removes value attributes from <input>
     elements, strips common CSRF/meta tags, and redacts likely token-like keys

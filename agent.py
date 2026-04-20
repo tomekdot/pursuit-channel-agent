@@ -36,6 +36,7 @@ import re
 import sys
 import time
 from typing import List, Optional, Tuple
+from urllib.parse import urlparse
 
 import datetime as dt
 from astral import moon as astral_moon
@@ -55,6 +56,12 @@ LOGIN_URL = os.getenv("LOGIN_URL", "https://www.maniaplanet.com/login")
 TARGET_URL = os.getenv(
     "TARGET_URL",
     "https://www.maniaplanet.com/programs/manager/106/episodes/106/playlist",
+)
+
+ALLOWED_HOST_SUFFIXES = tuple(
+    suffix.strip().lower().lstrip(".")
+    for suffix in os.getenv("ALLOWED_HOST_SUFFIXES", "maniaplanet.com").split(",")
+    if suffix.strip()
 )
 
 # Comma-separated playlist IDs from environment, converted to a list.
@@ -103,6 +110,40 @@ _SENSITIVE_VALUES = [value for value in (LOGIN, PASSWORD) if value]
 if (os.getenv("CI") or os.getenv("GITHUB_ACTIONS")) and SAVE_DEBUG and not ALLOW_LOCAL_DEBUG:
     # Fail fast to avoid accidentally saving debug artifacts in CI
     raise RuntimeError("SAVE_DEBUG is not allowed in CI environments. To override (not recommended), set ALLOW_LOCAL_DEBUG=1 locally.")
+
+
+def _host_matches_allowed_suffix(hostname: str, suffix: str) -> bool:
+    hostname = hostname.lower()
+    suffix = suffix.lower().lstrip(".")
+    return hostname == suffix or hostname.endswith("." + suffix)
+
+
+def is_safe_url(url: str) -> bool:
+    parsed = urlparse(url)
+    if parsed.scheme != "https" or not parsed.hostname:
+        return False
+    return any(_host_matches_allowed_suffix(parsed.hostname, suffix) for suffix in ALLOWED_HOST_SUFFIXES)
+
+
+def _require_safe_url(url: str, label: str) -> None:
+    parsed = urlparse(url)
+    if parsed.scheme != "https":
+        raise RuntimeError(f"{label} must use https://, got: {url}")
+    if not parsed.hostname:
+        raise RuntimeError(f"{label} must include a hostname, got: {url}")
+    if not is_safe_url(url):
+        allowed = ", ".join(ALLOWED_HOST_SUFFIXES) or "<none>"
+        raise RuntimeError(f"{label} must point to an allowed host suffix ({allowed}), got: {url}")
+
+
+def _is_login_page(url: str) -> bool:
+    parsed = urlparse(url)
+    path = (parsed.path or "").lower().rstrip("/")
+    return path.endswith("/login") or path.endswith("/signin")
+
+
+_require_safe_url(LOGIN_URL, "LOGIN_URL")
+_require_safe_url(TARGET_URL, "TARGET_URL")
 
 
 class RedactingFilter(logging.Filter):
@@ -356,7 +397,19 @@ def build_driver():
     options.add_argument("--headless=new")  # Run in headless mode
     options.add_argument("--no-sandbox")  # Required for running as root in Docker
     options.add_argument("--disable-dev-shm-usage")  # Overcome limited resource problems
+    options.add_argument("--disable-extensions")
+    options.add_argument("--disable-default-apps")
+    options.add_argument("--disable-popup-blocking")
+    options.add_argument("--disable-background-networking")
     options.add_argument("--window-size=1200,900")  # Set a reasonable window size
+    options.add_experimental_option(
+        "prefs",
+        {
+            "download.prompt_for_download": False,
+            "download.directory_upgrade": True,
+            "profile.default_content_setting_values.automatic_downloads": 2,
+        },
+    )
     chromedriver_path = os.getenv("CHROMEDRIVER")
     # Optional runtime Chromedriver hash verification (set CHROMEDRIVER_HASH env var)
     def _verify_chromedriver(path: str, expected_sha256: Optional[str] = None):
@@ -502,7 +555,10 @@ def smart_fill_login(driver, login: str, password: str):
     from selenium.webdriver.support import expected_conditions as EC
 
     wait = WebDriverWait(driver, WAIT_TIMEOUT)
+    _require_safe_url(LOGIN_URL, "LOGIN_URL")
     driver.get(LOGIN_URL)
+    if not is_safe_url(driver.current_url):
+        raise RuntimeError(f"Unexpected login domain: {driver.current_url}")
     save_debug(driver, "login_page")
 
     # A list of common locators for the username/login field
@@ -575,21 +631,25 @@ def smart_fill_login(driver, login: str, password: str):
 
     submit_button.click()
 
-    # Wait for the URL to change after login
+    # Wait for a safe redirect after login.
     try:
-        wait.until(lambda d: d.current_url != LOGIN_URL)
-    except Exception:
-        # If the URL doesn't change, log a warning and continue
-        save_debug(driver, "after_login_no_redirect")
-        _log(logging.WARNING, "No redirect detected after login; continuing to TARGET_URL")
+        wait.until(lambda d: is_safe_url(d.current_url) and not _is_login_page(d.current_url))
     except Exception as e:
-        # Log the exception and capture debug artifacts to help diagnosis, then re-raise
+        # Log the exception and capture debug artifacts to help diagnosis, then re-raise.
         logger.exception(f"Error while waiting for post-login redirect: {e}")
         try:
             save_debug(driver, "login_exception")
         except Exception:
             pass
         raise
+
+    if not is_safe_url(driver.current_url):
+        save_debug(driver, "unsafe_login_redirect")
+        raise RuntimeError(f"Unexpected login redirect domain: {driver.current_url}")
+
+    if _is_login_page(driver.current_url):
+        save_debug(driver, "after_login_no_redirect")
+        _log(logging.WARNING, "No redirect detected after login; continuing to TARGET_URL")
 
 
 def change_playlist(driver, playlist_id: str):
@@ -607,6 +667,7 @@ def change_playlist(driver, playlist_id: str):
     _log(logging.INFO, f"change_playlist called with playlist_id={playlist_id}")
     
     wait = WebDriverWait(driver, WAIT_TIMEOUT)
+    _require_safe_url(TARGET_URL, "TARGET_URL")
     _log(logging.INFO, f"Navigating to TARGET_URL: {TARGET_URL}")
     driver.get(TARGET_URL)
     
@@ -614,9 +675,13 @@ def change_playlist(driver, playlist_id: str):
     time.sleep(2)
     _log(logging.INFO, f"Current URL: {driver.current_url}")
     _log(logging.INFO, f"Page title: {driver.title}")
+
+    if not is_safe_url(driver.current_url):
+        save_debug(driver, "unsafe_target_domain")
+        raise RuntimeError(f"Unexpected target domain: {driver.current_url}")
     
     # Check if we got redirected to login page
-    if "login" in driver.current_url.lower():
+    if _is_login_page(driver.current_url):
         _log(logging.ERROR, "Session lost - redirected to login page. Check login flow.")
         save_debug(driver, "session_lost")
         raise RuntimeError("Session lost after login - redirected back to login page")

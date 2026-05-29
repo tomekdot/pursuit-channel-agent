@@ -2,7 +2,7 @@
 
 Automated agent that logs into ManiaPlanet and sets a playlist based on lunar calendar. Uses `skyfield` for precise moon phase calculations and `Selenium` for web automation.
 
-Runs daily at 07:00 UTC via GitHub Actions.
+Runs daily at 04:00 UTC via GitHub Actions.
 
 ## ✨ Features
 

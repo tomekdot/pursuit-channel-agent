@@ -86,3 +86,9 @@ def test_sanitize_html_redacts_jwt_and_tokens():
     assert "abc.def.ghi" not in out
     assert "s3cr3t" not in out
     assert "TOKEN123" not in out
+
+
+def test_sanitize_html_handles_noncanonical_script_end_tag():
+    html = '<script>var token="s3cr3t"</script foo="bar">'
+    out = agent.sanitize_html(html)
+    assert "s3cr3t" not in out

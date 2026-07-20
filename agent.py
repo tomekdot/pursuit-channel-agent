@@ -483,7 +483,7 @@ def sanitize_html(html: str) -> str:
         # SANITIZE_STRIP_SCRIPTS in case script content is ever needed for debugging.
         if SANITIZE_STRIP_SCRIPTS:
             html = re.sub(
-                r"(<script\b[^>]*>)(.*?)(</script>)",
+                r"(<script\b[^>]*>)(.*?)(</script\b[^>]*>)",
                 r"\1/* [REDACTED: script body stripped for debug export] */\3",
                 html,
                 flags=re.I | re.S,

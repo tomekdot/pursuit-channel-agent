@@ -13,7 +13,10 @@ jobs:
     # This workflow is triggered only by schedule and workflow_dispatch;
     # it does not run on pull_request events, so no runtime pull_request
     # context checks are necessary here.
-    runs-on: ubuntu-latest
+    # Pinned instead of `ubuntu-latest`: the -latest label migrates to a
+    # newer OS gradually, which would silently change the browser/Selenium
+    # environment this job depends on.
+    runs-on: ubuntu-24.04
     # Intentionally keep this job free of repository-level `vars` expressions
     # that can trigger editor schema warnings. Chromedriver provisioning is
     # handled by a separate manual workflow (`chromedriver-provision.yml`).
